@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="personal_digital_assets"
+        android:label="个人数字资产"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

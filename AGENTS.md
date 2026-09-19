@@ -40,5 +40,9 @@
 
 - Flutter 不在 PATH，完整路径：`C:\dev\flutter\bin\flutter.bat`。
 - 每次 pub 相关命令前设置国内镜像：`$env:PUB_HOSTED_URL='https://pub.flutter-io.cn'; $env:FLUTTER_STORAGE_BASE_URL='https://storage.flutter-io.cn'`。
+- JDK 17：`C:\Program Files\Eclipse Adoptium\jdk-17.0.17.10-hotspot`（构建前设 `$env:JAVA_HOME`）。
+- Android SDK：`C:\dev\android-sdk`（platform-tools、android-36、build-tools 36.0.0 已装，构建前设 `$env:ANDROID_HOME`）。
+- 打 APK：在 `C:\dev\pda` 运行 `flutter build apk --release`，产物在 `build\app\outputs\flutter-apk\app-release.apk`。
+- Gradle 发行包走腾讯镜像（`android/gradle/wrapper/gradle-wrapper.properties` 已配置），官方源在本机直连会卡死。
 - 验证：`flutter analyze` + `flutter test`。
 - 本机 git 对 github.com 配置了失效代理（socks5://127.0.0.1:1081），推送时需加参数绕过：`git -c http.https://github.com.proxy= push`。
