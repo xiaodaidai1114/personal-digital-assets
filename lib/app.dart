@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'data/demo_data.dart';
 import 'data/memory_asset_repository.dart';
+import 'theme/app_theme.dart';
 import 'ui/asset_list_screen.dart';
 import 'ui/graph_screen.dart';
 import 'ui/settings_screen.dart';
@@ -45,15 +46,8 @@ class _PersonalDigitalAssetsAppState extends State<PersonalDigitalAssetsApp> {
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: '个人数字资产',
-        theme: ThemeData(
-          colorSchemeSeed: const Color(0xFF3949AB),
-          useMaterial3: true,
-        ),
-        darkTheme: ThemeData(
-          colorSchemeSeed: const Color(0xFF3949AB),
-          useMaterial3: true,
-          brightness: Brightness.dark,
-        ),
+        theme: AppTheme.day(),
+        darkTheme: AppTheme.night(),
         home: _controller.isUnlocked
             ? FutureBuilder<MemoryAssetRepository>(
                 future: _repositoryFuture,
@@ -98,7 +92,11 @@ class _MainShellState extends State<MainShell> {
         controller: widget.controller,
         repository: widget.repository,
       ),
-      const GraphScreen(),
+      GraphScreen(
+        controller: widget.controller,
+        repository: widget.repository,
+        onManageAssets: () => setState(() => _selectedIndex = 0),
+      ),
       SettingsScreen(controller: widget.controller),
     ];
     return Scaffold(

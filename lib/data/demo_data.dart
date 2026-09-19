@@ -26,7 +26,12 @@ Future<MemoryAssetRepository> seedDemoData() async {
       id: subscriptionId,
       type: AssetType.subscription,
       title: 'AI 助手订阅',
-      fields: {'plan': 'Pro', 'cycle': 'monthly', 'amount': '20 USD'},
+      fields: {
+        'plan': 'Pro',
+        'cycle': 'monthly',
+        'amount': '20 USD',
+        'nextRenewalDate': '2026-09-28',
+      },
       tags: ['演示', 'AI'],
     ),
     Asset(

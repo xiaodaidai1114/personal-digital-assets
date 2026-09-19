@@ -12,7 +12,7 @@ UI 设计方向已定为「青穹资产云」（Airy Vault Nebula），设计 to
 
 ## 状态与路线
 
-- 阶段：MVP 迭代一完成（骨架 + 加密核心 + 资产 CRUD，内存存储）。下一步：SQLCipher 持久化 → 图谱 → 账单日历。
+- 阶段：MVP 迭代一与「青穹资产云」UI 落地完成（骨架 + 加密核心 + 资产 CRUD + 主要页面视觉，内存存储）。当前图谱为原生星云预览，待替换 G6；下一步：SQLCipher 持久化 → G6 图谱 → 账单日历。
 - 平台：仅 Android；不做 iOS 与桌面。
 - 分支：日常开发在 `guoxingyun`，稳定后合入 `main`；远程仓库 `xiaodaidai1114/personal-digital-assets`（私有）。
 - MVP 顺序：加密核心与解锁 → 资产 CRUD → 关系与图谱 → 账单日历与提醒 → 加密备份。每完成一项更新此处勾选。
