@@ -6,6 +6,7 @@ import '../../domain/relation.dart';
 Widget buildGraphView({
   required List<Asset> assets,
   required List<Relation> relations,
+  Set<String> focusIds = const {},
   required ValueChanged<Asset> onOpenNode,
 }) {
   throw UnsupportedError('图谱视图不支持当前平台');

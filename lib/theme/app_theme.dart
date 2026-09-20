@@ -5,13 +5,13 @@ import '../domain/asset.dart';
 class AppColors {
   const AppColors._();
 
-  static const paper = Color(0xFFF6F2EA);
-  static const paper2 = Color(0xFFEFEBE3);
-  static const sheet = Color(0xFFFBF8F1);
+  static const paper = Color(0xFFFFFFFF);
+  static const paper2 = Color(0xFFF4F1EC);
+  static const sheet = Color(0xFFFFFFFF);
   static const ink = Color(0xFF1C1B17);
-  static const ink2 = Color(0xFF6A675E);
-  static const ink3 = Color(0xFF9A9588);
-  static const rule = Color(0xFFE6DFD2);
+  static const ink2 = Color(0xFF57544C);
+  static const ink3 = Color(0xFF6E6A60);
+  static const rule = Color(0xFFE3E0D8);
   static const mark = Color(0xFF8A4A2B);
   static const ok = Color(0xFF3D5A45);
 
@@ -40,13 +40,43 @@ class AppColors {
 class AppTheme {
   const AppTheme._();
 
+  static const eveningMatrix = <double>[
+    .98,
+    0,
+    0,
+    0,
+    0,
+    0,
+    .955,
+    0,
+    0,
+    0,
+    0,
+    0,
+    .925,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+  ];
+
+  static const eveningColorFilter = ColorFilter.matrix(eveningMatrix);
+
   static ThemeData day() {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: AppColors.ink,
       primary: AppColors.ink,
+      onPrimary: AppColors.sheet,
       surface: AppColors.sheet,
       onSurface: AppColors.ink,
+      onSurfaceVariant: AppColors.ink2,
+      outline: AppColors.rule,
+      outlineVariant: AppColors.rule,
       secondaryContainer: AppColors.paper2,
+      onSecondaryContainer: AppColors.ink,
       error: AppColors.danger,
     );
     final base = ThemeData(useMaterial3: true, colorScheme: colorScheme);
@@ -79,7 +109,13 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.sheet,
+        fillColor: AppColors.paper2,
+        labelStyle: const TextStyle(color: AppColors.ink2),
+        floatingLabelStyle: const TextStyle(color: AppColors.ink),
+        hintStyle: const TextStyle(color: AppColors.ink3),
+        helperStyle: const TextStyle(color: AppColors.ink2),
+        prefixIconColor: AppColors.ink2,
+        suffixIconColor: AppColors.ink2,
         border: _inputBorder(AppColors.rule),
         enabledBorder: _inputBorder(AppColors.rule),
         focusedBorder: _inputBorder(AppColors.mark, width: 2),
@@ -91,26 +127,62 @@ class AppTheme {
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.ink,
-          foregroundColor: AppColors.sheet,
-          minimumSize: const Size(64, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
+        style:
+            FilledButton.styleFrom(
+              minimumSize: const Size(64, 48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ).copyWith(
+              backgroundColor: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.disabled)
+                    ? AppColors.paper2
+                    : AppColors.ink,
+              ),
+              foregroundColor: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.disabled)
+                    ? AppColors.ink2
+                    : AppColors.sheet,
+              ),
+            ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(64, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
+        style:
+            OutlinedButton.styleFrom(
+              minimumSize: const Size(64, 48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ).copyWith(
+              foregroundColor: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.disabled)
+                    ? AppColors.ink2
+                    : AppColors.ink,
+              ),
+            ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.mark,
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
+        style:
+            TextButton.styleFrom(
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ).copyWith(
+              foregroundColor: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.disabled)
+                    ? AppColors.ink2
+                    : AppColors.mark,
+              ),
+            ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.sheet,
@@ -136,6 +208,11 @@ class AppTheme {
         showCheckmark: false,
       ),
       dividerTheme: const DividerThemeData(color: AppColors.rule, thickness: 1),
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: AppColors.ink,
+        selectionColor: AppColors.paper2,
+        selectionHandleColor: AppColors.ink,
+      ),
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.sheet,
         surfaceTintColor: Colors.transparent,

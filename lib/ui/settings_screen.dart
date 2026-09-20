@@ -2,15 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../app_services.dart';
+import '../app_version.dart';
 import '../vault/vault_controller.dart';
 import '../data/backup/backup_service.dart';
+import '../data/settings_store.dart';
 import '../theme/app_theme.dart';
 
 /// 设置：安全（锁定/自动锁定/生物识别）、数据（加密备份导出与恢复）、关于。
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.services});
+  const SettingsScreen({
+    super.key,
+    required this.services,
+    required this.onAppearanceChanged,
+  });
 
   final AppServices services;
+  final ValueChanged<AppAppearance> onAppearanceChanged;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -183,6 +190,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     body: ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        const _SectionTitle('外观'),
+        Card(
+          child: _AppearanceTile(
+            services: widget.services,
+            onAppearanceChanged: widget.onAppearanceChanged,
+          ),
+        ),
         const _SectionTitle('安全'),
         Card(
           child: Padding(
@@ -248,7 +262,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('当前版本'),
-            subtitle: Text('v1.1.0 · 纸墨加密账册'),
+            subtitle: Text('v${AppVersion.current} · 纸墨加密账册'),
           ),
         ),
         const Card(
@@ -274,6 +288,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     return '${delay.inSeconds} 秒无操作后锁定';
   }
+}
+
+class _AppearanceTile extends StatefulWidget {
+  const _AppearanceTile({
+    required this.services,
+    required this.onAppearanceChanged,
+  });
+
+  final AppServices services;
+  final ValueChanged<AppAppearance> onAppearanceChanged;
+
+  @override
+  State<_AppearanceTile> createState() => _AppearanceTileState();
+}
+
+class _AppearanceTileState extends State<_AppearanceTile> {
+  late Future<AppAppearance> _appearance;
+
+  @override
+  void initState() {
+    super.initState();
+    _appearance = widget.services.settingsStore.appearance();
+  }
+
+  Future<void> _select(Set<AppAppearance> selection) async {
+    final appearance = selection.first;
+    await widget.services.settingsStore.setAppearance(appearance);
+    widget.onAppearanceChanged(appearance);
+    if (mounted) {
+      setState(() {
+        _appearance = Future.value(appearance);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<AppAppearance>(
+    future: _appearance,
+    builder: (context, snapshot) {
+      final appearance = snapshot.data ?? AppAppearance.morning;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.wb_sunny_outlined),
+              title: const Text('界面模式'),
+              subtitle: const Text('早晨和晚上都使用白底黑字'),
+            ),
+            SegmentedButton<AppAppearance>(
+              segments: const [
+                ButtonSegment(value: AppAppearance.morning, label: Text('早晨')),
+                ButtonSegment(value: AppAppearance.evening, label: Text('晚上')),
+              ],
+              selected: {appearance},
+              onSelectionChanged: (selection) {
+                _select(selection);
+              },
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 enum _AutoLockOption {

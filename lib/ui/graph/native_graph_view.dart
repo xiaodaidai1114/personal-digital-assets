@@ -14,11 +14,13 @@ class NativeGraphView extends StatefulWidget {
     super.key,
     required this.assets,
     required this.relations,
+    this.focusIds = const {},
     required this.onOpenNode,
   });
 
   final List<Asset> assets;
   final List<Relation> relations;
+  final Set<String> focusIds;
   final ValueChanged<Asset> onOpenNode;
 
   @override
@@ -48,7 +50,7 @@ class _NativeGraphViewState extends State<NativeGraphView>
     _tick = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
-    )..repeat();
+    )..forward();
     _tick.addListener(_step);
   }
 
@@ -106,9 +108,15 @@ class _NativeGraphViewState extends State<NativeGraphView>
     if (mounted) {
       setState(() {});
     }
+    if (_alpha < .03 && _tick.isAnimating) {
+      _tick.stop();
+    }
   }
 
-  void _reheat() => _alpha = .5;
+  void _reheat() {
+    _alpha = .5;
+    _tick.forward(from: 0);
+  }
 
   void _layoutInitial(Size size) {
     _center = Offset(size.width / 2, size.height / 2);
@@ -150,6 +158,7 @@ class _NativeGraphViewState extends State<NativeGraphView>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_positions.isEmpty && widget.assets.isNotEmpty) {
           setState(() => _layoutInitial(size));
+          _reheat();
         }
       });
       return InteractiveViewer(
@@ -169,6 +178,7 @@ class _NativeGraphViewState extends State<NativeGraphView>
                       relations: widget.relations,
                       positions: _positions,
                       selectedId: _selectedId,
+                      focusIds: widget.focusIds,
                     ),
                   ),
                 ),
@@ -188,6 +198,8 @@ class _NativeGraphViewState extends State<NativeGraphView>
       return const SizedBox.shrink();
     }
     final selected = _selectedId == asset.id;
+    final dimmed =
+        widget.focusIds.isNotEmpty && !widget.focusIds.contains(asset.id);
     return Positioned(
       left: position.dx - 34,
       top: position.dy - 42,
@@ -197,38 +209,50 @@ class _NativeGraphViewState extends State<NativeGraphView>
         key: ValueKey('entrance-${asset.id}'),
         tween: Tween(begin: 0, end: 1),
         duration: Duration(milliseconds: 320 + index * 55),
-        curve: Curves.easeOutBack,
+        curve: Curves.easeOutCubic,
         builder: (context, value, child) => Opacity(
           opacity: value.clamp(0, 1),
-          child: Transform.scale(scale: value, child: child),
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 5),
+            child: child,
+          ),
         ),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _onNodeTap(asset),
-          onPanStart: (_) => _reheat(),
-          onPanUpdate: (details) {
-            setState(() {
-              _positions[asset.id] = _positions[asset.id]! + details.delta;
-              _velocities[asset.id] = details.delta;
-            });
-          },
-          onPanEnd: (_) => _reheat(),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _NodeBadge(asset: asset, selected: selected),
-              const SizedBox(height: 5),
-              Text(
-                asset.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.graphNode,
-                  fontSize: 11,
-                  height: 1.2,
+        child: Semantics(
+          label: '${asset.type.label} ${asset.title}',
+          button: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _onNodeTap(asset),
+            onPanStart: (_) => _reheat(),
+            onPanUpdate: (details) {
+              setState(() {
+                _positions[asset.id] = _positions[asset.id]! + details.delta;
+                _velocities[asset.id] = details.delta;
+              });
+            },
+            onPanEnd: (_) => _reheat(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _NodeBadge(asset: asset, selected: selected),
+                const SizedBox(height: 5),
+                Text(
+                  asset.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(
+                        color: AppColors.graphNode,
+                        fontSize: 11,
+                        height: 1.2,
+                      ).copyWith(
+                        color: AppColors.graphNode.withValues(
+                          alpha: dimmed ? .18 : 1,
+                        ),
+                      ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -293,11 +317,13 @@ class _NebulaPainter extends CustomPainter {
     required this.relations,
     required this.positions,
     required this.selectedId,
+    required this.focusIds,
   });
 
   final List<Relation> relations;
   final Map<String, Offset> positions;
   final String? selectedId;
+  final Set<String> focusIds;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -312,9 +338,14 @@ class _NebulaPainter extends CustomPainter {
       if (from == null || to == null) {
         continue;
       }
-      final isActive =
+      final isSelected =
           selected != null &&
           (relation.fromAssetId == selected || relation.toAssetId == selected);
+      final inFocus =
+          focusIds.isEmpty ||
+          focusIds.contains(relation.fromAssetId) ||
+          focusIds.contains(relation.toAssetId);
+      final isActive = isSelected || inFocus;
       final color = AppColors.graphNode.withValues(alpha: isActive ? .9 : .18);
       final paint = Paint()
         ..color = color

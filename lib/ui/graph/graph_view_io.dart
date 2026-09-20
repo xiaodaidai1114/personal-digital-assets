@@ -11,6 +11,7 @@ import 'webview_graph_view.dart';
 Widget buildGraphView({
   required List<Asset> assets,
   required List<Relation> relations,
+  Set<String> focusIds = const {},
   required ValueChanged<Asset> onOpenNode,
 }) {
   if (defaultTargetPlatform == TargetPlatform.android &&
@@ -18,12 +19,14 @@ Widget buildGraphView({
     return WebViewGraphView(
       assets: assets,
       relations: relations,
+      focusIds: focusIds,
       onOpenNode: onOpenNode,
     );
   }
   return NativeGraphView(
     assets: assets,
     relations: relations,
+    focusIds: focusIds,
     onOpenNode: onOpenNode,
   );
 }

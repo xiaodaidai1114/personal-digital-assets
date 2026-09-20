@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/asset_repository.dart';
 import '../domain/asset.dart';
+import '../domain/asset_field_format.dart';
 import '../domain/relation.dart';
 import '../theme/app_theme.dart';
 import '../vault/vault_controller.dart';
@@ -21,12 +22,18 @@ class AssetDetailScreen extends StatefulWidget {
     required this.controller,
     required this.repository,
     required this.assetId,
+    this.embedded = false,
+    this.onDeleted,
+    this.onDataChanged,
     this.onOpenGraph,
   });
 
   final VaultController controller;
   final AssetRepository repository;
   final String assetId;
+  final bool embedded;
+  final VoidCallback? onDeleted;
+  final VoidCallback? onDataChanged;
   final VoidCallback? onOpenGraph;
 
   @override
@@ -42,6 +49,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
   String? _secretError;
   bool _busy = false;
   bool _loaded = false;
+  String? _error;
   Timer? _autoHideTimer;
 
   @override
@@ -57,30 +65,50 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
   }
 
   Future<void> _reload() async {
-    final asset = await widget.repository.getAsset(widget.assetId);
-    final relations = asset == null
-        ? const <Relation>[]
-        : await widget.repository.relationsOf(asset.id);
-    final relatedAssets = <String, Asset>{};
-    for (final relation in relations) {
-      final otherId = relation.fromAssetId == asset?.id
-          ? relation.toAssetId
-          : relation.fromAssetId;
-      final other = await widget.repository.getAsset(otherId);
-      if (other != null) {
-        relatedAssets[relation.id] = other;
+    try {
+      final asset = await widget.repository.getAsset(widget.assetId);
+      final relations = asset == null
+          ? const <Relation>[]
+          : await widget.repository.relationsOf(asset.id);
+      final relatedAssets = <String, Asset>{};
+      for (final relation in relations) {
+        final otherId = relation.fromAssetId == asset?.id
+            ? relation.toAssetId
+            : relation.fromAssetId;
+        final other = await widget.repository.getAsset(otherId);
+        if (other != null) {
+          relatedAssets[relation.id] = other;
+        }
       }
+      final allAssets = await widget.repository.listAssets();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _asset = asset;
+        _relations = relations;
+        _relatedAssets = relatedAssets;
+        _allAssets = allAssets;
+        _loaded = true;
+        _error = null;
+      });
+    } on Exception {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loaded = true;
+        _error = '读取详情失败';
+      });
     }
-    final allAssets = await widget.repository.listAssets();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _asset = asset;
-      _relations = relations;
-      _relatedAssets = relatedAssets;
-      _allAssets = allAssets;
-      _loaded = true;
+  }
+
+  void _scheduleAutoHide() {
+    _autoHideTimer?.cancel();
+    _autoHideTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted) {
+        setState(() => _revealedSecret = null);
+      }
     });
   }
 
@@ -97,12 +125,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
       final plain = await widget.controller.decryptSecret(encrypted);
       if (mounted) {
         setState(() => _revealedSecret = plain);
-        _autoHideTimer?.cancel();
-        _autoHideTimer = Timer(const Duration(seconds: 8), () {
-          if (mounted) {
-            setState(() => _revealedSecret = null);
-          }
-        });
+        _scheduleAutoHide();
       }
     } on Exception {
       if (mounted) {
@@ -129,6 +152,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
       return;
     }
     await Clipboard.setData(ClipboardData(text: secret));
+    _scheduleAutoHide();
     if (mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('已复制，请注意剪贴板安全')));
@@ -161,7 +185,11 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
     if (confirmed == true) {
       await widget.repository.deleteAsset(asset.id);
       if (mounted) {
-        Navigator.of(context).pop();
+        if (widget.embedded) {
+          widget.onDeleted?.call();
+        } else {
+          Navigator.of(context).pop();
+        }
       }
     }
   }
@@ -189,6 +217,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
     if (created != null) {
       await widget.repository.saveRelation(created);
       await _reload();
+      widget.onDataChanged?.call();
     }
   }
 
@@ -214,6 +243,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
     if (confirmed == true) {
       await widget.repository.deleteRelation(relation.id);
       await _reload();
+      widget.onDataChanged?.call();
     }
   }
 
@@ -234,6 +264,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
       ),
     );
     await _reload();
+    widget.onDataChanged?.call();
   }
 
   @override
@@ -241,6 +272,17 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
     final asset = _asset;
     if (!_loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('资产详情')),
+        body: EmptyState(
+          icon: Icons.cloud_off_outlined,
+          title: _error!,
+          actionLabel: '重试',
+          onAction: _reload,
+        ),
+      );
     }
     if (asset == null) {
       return Scaffold(
@@ -253,56 +295,119 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
         ),
       );
     }
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(asset.title),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: '编辑',
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => AssetEditScreen(
-                    controller: widget.controller,
-                    repository: widget.repository,
-                    asset: asset,
+    return Listener(
+      onPointerDown: (_) {
+        if (_revealedSecret != null) {
+          _scheduleAutoHide();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: !widget.embedded,
+          title: Text(asset.title),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: '编辑',
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AssetEditScreen(
+                      controller: widget.controller,
+                      repository: widget.repository,
+                      asset: asset,
+                    ),
                   ),
+                );
+                await _reload();
+                widget.onDataChanged?.call();
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: '删除',
+              onPressed: _delete,
+            ),
+          ],
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AssetTypeBadge(type: asset.type, size: 36),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            asset.title,
+                            style: Theme.of(context).textTheme.headlineMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            asset.type.label,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? AppColors.nightTextSecondary
+                                      : AppColors.dayTextSecondary,
+                                ),
+                          ),
+                          if (asset.tags.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                for (final tag in asset.tags)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.paper2,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: AppColors.rule),
+                                    ),
+                                    child: Text(
+                                      tag,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(color: AppColors.ink2),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              );
-              await _reload();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: '删除',
-            onPressed: _delete,
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AssetTypeBadge(type: asset.type, size: 36),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          asset.title,
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          asset.type.label,
-                          style: Theme.of(context).textTheme.bodyMedium
+              ),
+            ),
+            if (asset.fields.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Text('字段', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Card(
+                child: Column(
+                  children: [
+                    for (final entry in asset.fields.entries.toList()) ...[
+                      ListTile(
+                        title: Text(
+                          AssetFieldFormat.label(entry.key),
+                          style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color:
                                     Theme.of(context).brightness ==
@@ -311,159 +416,110 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
                                     : AppColors.dayTextSecondary,
                               ),
                         ),
-                        if (asset.tags.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              for (final tag in asset.tags)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.paper2,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: AppColors.rule),
-                                  ),
-                                  child: Text(
-                                    tag,
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: AppColors.ink2),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (asset.fields.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Text('字段', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Card(
-              child: Column(
-                children: [
-                  for (final entry in asset.fields.entries.toList()) ...[
-                    ListTile(
-                      title: Text(
-                        entry.key,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? AppColors.nightTextSecondary
-                              : AppColors.dayTextSecondary,
+                        subtitle: Text(
+                          AssetFieldFormat.value(entry.key, entry.value),
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),
-                      subtitle: Text(
-                        entry.value?.toString() ?? '',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                    if (entry.key != asset.fields.keys.last)
-                      const Divider(height: 1),
+                      if (entry.key != asset.fields.keys.last)
+                        const Divider(height: 1),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
-          if (asset.encryptedSecret != null) ...[
+            ],
+            if (asset.encryptedSecret != null) ...[
+              const SizedBox(height: 20),
+              _SealedSecretCard(
+                revealed: _revealedSecret,
+                error: _secretError,
+                busy: _busy,
+                onReveal: _revealSecret,
+                onHide: _hideSecret,
+                onCopy: _copySecret,
+              ),
+            ],
             const SizedBox(height: 20),
-            _SealedSecretCard(
-              revealed: _revealedSecret,
-              error: _secretError,
-              busy: _busy,
-              onReveal: _revealSecret,
-              onHide: _hideSecret,
-              onCopy: _copySecret,
+            _LocalGraphCard(
+              assets: [
+                asset,
+                ..._allAssets.where(
+                  (item) => _relations.any(
+                    (relation) =>
+                        (relation.fromAssetId == asset.id &&
+                            relation.toAssetId == item.id) ||
+                        (relation.toAssetId == asset.id &&
+                            relation.fromAssetId == item.id),
+                  ),
+                ),
+              ],
+              relations: _relations,
+              onOpenGraph: widget.onOpenGraph,
+              onOpenNode: _openPreviewNode,
             ),
-          ],
-          const SizedBox(height: 20),
-          _LocalGraphCard(
-            assets: [
-              asset,
-              ..._allAssets.where(
-                (item) => _relations.any(
-                  (relation) =>
-                      (relation.fromAssetId == asset.id &&
-                          relation.toAssetId == item.id) ||
-                      (relation.toAssetId == asset.id &&
-                          relation.fromAssetId == item.id),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '关联',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
-              ),
-            ],
-            relations: _relations,
-            onOpenGraph: widget.onOpenGraph,
-            onOpenNode: _openPreviewNode,
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '关联',
-                  style: Theme.of(context).textTheme.titleLarge,
+                TextButton.icon(
+                  onPressed: _addRelation,
+                  icon: const Icon(Icons.add_link),
+                  label: const Text('添加关联'),
                 ),
-              ),
-              TextButton.icon(
-                onPressed: _addRelation,
-                icon: const Icon(Icons.add_link),
-                label: const Text('添加关联'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (_relations.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_relations.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Icon(Icons.link_outlined, size: 32),
+                      SizedBox(height: 8),
+                      Text('资产之间还没有关联'),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Card(
                 child: Column(
                   children: [
-                    Icon(Icons.link_outlined, size: 32),
-                    SizedBox(height: 8),
-                    Text('资产之间还没有关联'),
+                    for (final relation in _relations) ...[
+                      ListTile(
+                        leading: AssetTypeBadge(
+                          type:
+                              _relatedAssets[relation.id]?.type ??
+                              AssetType.other,
+                          size: 34,
+                        ),
+                        title: Text(
+                          '${relation.type.label}：${_relatedAssets[relation.id]?.title ?? '未知资产'}',
+                        ),
+                        subtitle: Text(
+                          relation.fromAssetId == asset.id
+                              ? '${asset.title} → ${_relatedAssets[relation.id]?.title ?? '未知资产'}'
+                              : '${_relatedAssets[relation.id]?.title ?? '未知资产'} → ${asset.title}',
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.link_off_outlined),
+                          tooltip: '移除关联',
+                          onPressed: () => _deleteRelation(relation),
+                        ),
+                      ),
+                      if (relation != _relations.last) const Divider(height: 1),
+                    ],
                   ],
                 ),
               ),
-            )
-          else
-            Card(
-              child: Column(
-                children: [
-                  for (final relation in _relations) ...[
-                    ListTile(
-                      leading: AssetTypeBadge(
-                        type:
-                            _relatedAssets[relation.id]?.type ??
-                            AssetType.other,
-                        size: 34,
-                      ),
-                      title: Text(
-                        '${relation.type.label}：${_relatedAssets[relation.id]?.title ?? '未知资产'}',
-                      ),
-                      subtitle: Text(
-                        relation.fromAssetId == asset.id
-                            ? '当前资产 → 关联资产'
-                            : '关联资产 → 当前资产',
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.link_off_outlined),
-                        tooltip: '移除关联',
-                        onPressed: () => _deleteRelation(relation),
-                      ),
-                    ),
-                    if (relation != _relations.last) const Divider(height: 1),
-                  ],
-                ],
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -594,6 +650,7 @@ class _LocalGraphCard extends StatelessWidget {
             child: buildGraphView(
               assets: assets,
               relations: relations,
+              focusIds: assets.isEmpty ? const {} : {assets.first.id},
               onOpenNode: onOpenNode,
             ),
           ),
@@ -643,13 +700,37 @@ class _AddRelationSheet extends StatefulWidget {
 }
 
 class _AddRelationSheetState extends State<_AddRelationSheet> {
+  final _targetSearchController = TextEditingController();
   RelationType _type = RelationType.relatesTo;
   Asset? _target;
   bool _forward = true;
 
   @override
+  void dispose() {
+    _targetSearchController.dispose();
+    super.dispose();
+  }
+
+  List<Asset> get _visibleCandidates {
+    final query = _targetSearchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return widget.candidates;
+    }
+    return widget.candidates
+        .where(
+          (candidate) =>
+              candidate.title.toLowerCase().contains(query) ||
+              candidate.type.label.toLowerCase().contains(query) ||
+              candidate.tags.any((tag) => tag.toLowerCase().contains(query)),
+        )
+        .toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final candidates = _visibleCandidates;
+    final targetTitle = _target?.title ?? '目标资产';
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
       child: Column(
@@ -668,23 +749,65 @@ class _AddRelationSheetState extends State<_AddRelationSheet> {
             onChanged: (value) => setState(() => _type = value ?? _type),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<Asset>(
-            initialValue: _target,
-            decoration: const InputDecoration(labelText: '关联资产'),
-            items: [
-              for (final candidate in widget.candidates)
-                DropdownMenuItem(
-                  value: candidate,
-                  child: Text('${candidate.title}（${candidate.type.label}）'),
-                ),
-            ],
-            onChanged: (value) => setState(() => _target = value),
+          TextField(
+            controller: _targetSearchController,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: '搜索关联资产',
+              prefixIcon: Icon(Icons.search),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 220,
+            child: candidates.isEmpty
+                ? const Center(child: Text('没有匹配的资产'))
+                : ListView.separated(
+                    itemCount: candidates.length,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final candidate = candidates[index];
+                      final selected = candidate.id == _target?.id;
+                      return ListTile(
+                        dense: true,
+                        selected: selected,
+                        leading: AssetTypeBadge(type: candidate.type, size: 28),
+                        title: Text(
+                          candidate.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(candidate.type.label),
+                        trailing: selected
+                            ? const Icon(Icons.check_circle_outline)
+                            : null,
+                        onTap: () => setState(
+                          () => _target = selected ? null : candidate,
+                        ),
+                      );
+                    },
+                  ),
           ),
           const SizedBox(height: 12),
           SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: true, label: Text('当前 → 对方')),
-              ButtonSegment(value: false, label: Text('对方 → 当前')),
+            segments: [
+              ButtonSegment(
+                value: true,
+                label: Text(
+                  '${widget.current.title} → $targetTitle',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              ButtonSegment(
+                value: false,
+                label: Text(
+                  '$targetTitle → ${widget.current.title}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
             selected: {_forward},
             onSelectionChanged: (selection) =>

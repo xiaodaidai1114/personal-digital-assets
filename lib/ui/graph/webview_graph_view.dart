@@ -5,6 +5,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../domain/asset.dart';
 import '../../domain/relation.dart';
+import '../../theme/app_theme.dart';
+import '../widgets/asset_type_badge.dart';
 
 /// Android 端 G6 图谱容器：WebView 内嵌离线 G6 页面，原生侧只传 JSON 数据。
 /// 节点点击经 GraphTap 通道回传，其余交互（拖拽/缩放/力导布局）由 G6 完成。
@@ -13,11 +15,13 @@ class WebViewGraphView extends StatefulWidget {
     super.key,
     required this.assets,
     required this.relations,
+    this.focusIds = const {},
     required this.onOpenNode,
   });
 
   final List<Asset> assets;
   final List<Relation> relations;
+  final Set<String> focusIds;
   final ValueChanged<Asset> onOpenNode;
 
   @override
@@ -27,6 +31,7 @@ class WebViewGraphView extends StatefulWidget {
 class _WebViewGraphViewState extends State<WebViewGraphView> {
   late final WebViewController _controller;
   bool _loaded = false;
+  bool _failed = false;
 
   @override
   void initState() {
@@ -45,6 +50,11 @@ class _WebViewGraphViewState extends State<WebViewGraphView> {
       )
       ..setNavigationDelegate(
         NavigationDelegate(
+          onWebResourceError: (error) {
+            if (error.isForMainFrame == true && mounted) {
+              setState(() => _failed = true);
+            }
+          },
           onPageFinished: (_) {
             _loaded = true;
             _pushData();
@@ -68,6 +78,7 @@ class _WebViewGraphViewState extends State<WebViewGraphView> {
       return;
     }
     final payload = {
+      'focusIds': widget.focusIds.toList(),
       'nodes': [
         for (final asset in widget.assets)
           {
@@ -83,6 +94,8 @@ class _WebViewGraphViewState extends State<WebViewGraphView> {
                 )
                 .length,
             'pinned': asset.isPinned,
+            'focused':
+                widget.focusIds.isEmpty || widget.focusIds.contains(asset.id),
           },
       ],
       'edges': [
@@ -92,6 +105,10 @@ class _WebViewGraphViewState extends State<WebViewGraphView> {
             'to': relation.toAssetId,
             'label': relation.type.label,
             'kind': relation.type.name,
+            'focused':
+                widget.focusIds.isEmpty ||
+                widget.focusIds.contains(relation.fromAssetId) ||
+                widget.focusIds.contains(relation.toAssetId),
             'strength': switch (relation.type) {
               RelationType.paidWith ||
               RelationType.registeredWith ||
@@ -118,5 +135,71 @@ class _WebViewGraphViewState extends State<WebViewGraphView> {
   };
 
   @override
-  Widget build(BuildContext context) => WebViewWidget(controller: _controller);
+  Widget build(BuildContext context) {
+    if (_failed) {
+      return _GraphFailureList(
+        assets: widget.assets,
+        relations: widget.relations,
+        focusIds: widget.focusIds,
+        onOpenNode: widget.onOpenNode,
+      );
+    }
+    return WebViewWidget(controller: _controller);
+  }
+}
+
+class _GraphFailureList extends StatelessWidget {
+  const _GraphFailureList({
+    required this.assets,
+    required this.relations,
+    required this.focusIds,
+    required this.onOpenNode,
+  });
+
+  final List<Asset> assets;
+  final List<Relation> relations;
+  final Set<String> focusIds;
+  final ValueChanged<Asset> onOpenNode;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: AppColors.nightBackground,
+    child: ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: assets.length,
+      separatorBuilder: (context, index) => Divider(
+        height: 1,
+        color: AppColors.nightTextPrimary.withValues(alpha: .12),
+      ),
+      itemBuilder: (context, index) {
+        final asset = assets[index];
+        final relationCount = relations
+            .where(
+              (relation) =>
+                  relation.fromAssetId == asset.id ||
+                  relation.toAssetId == asset.id,
+            )
+            .length;
+        final dimmed = focusIds.isNotEmpty && !focusIds.contains(asset.id);
+        return Opacity(
+          opacity: dimmed ? .18 : 1,
+          child: ListTile(
+            dense: true,
+            leading: AssetTypeBadge(type: asset.type, size: 30),
+            title: Text(
+              asset.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.nightTextPrimary),
+            ),
+            subtitle: Text(
+              '$relationCount 条关系',
+              style: const TextStyle(color: AppColors.nightTextSecondary),
+            ),
+            onTap: () => onOpenNode(asset),
+          ),
+        );
+      },
+    ),
+  );
 }

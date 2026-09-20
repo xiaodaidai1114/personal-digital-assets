@@ -4,10 +4,12 @@ import 'package:intl/intl.dart';
 import '../data/asset_repository.dart';
 import '../data/reminders/bill_calendar.dart';
 import '../domain/asset.dart';
+import '../domain/reminder_actions.dart';
 import '../theme/app_theme.dart';
 import '../vault/vault_controller.dart';
 import 'asset_detail_screen.dart';
 import 'widgets/asset_type_badge.dart';
+import 'widgets/empty_state.dart';
 
 /// 账单日历：月视图账单分布 + 选中日明细 + 未来 30 天续期提醒。
 class CalendarScreen extends StatefulWidget {
@@ -29,6 +31,7 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   List<Asset> _assets = [];
   bool _loading = true;
+  String? _error;
   late DateTime _focusedMonth;
   DateTime? _selectedDay;
 
@@ -41,6 +44,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Future<void> _reload() async {
+    if (_error != null) {
+      setState(() => _loading = true);
+    }
     try {
       final assets = await widget.repository.listAssets();
       if (!mounted) {
@@ -49,12 +55,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
       setState(() {
         _assets = assets;
         _loading = false;
+        _error = null;
       });
     } on Exception {
       if (!mounted) {
         return;
       }
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _error = '读取哨站失败';
+      });
     }
   }
 
@@ -76,6 +86,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('哨所')),
+        body: EmptyState(
+          icon: Icons.cloud_off_outlined,
+          title: _error!,
+          actionLabel: '重试',
+          onAction: _reload,
+        ),
+      );
+    }
     final theme = Theme.of(context);
     final monthBills = BillCalendar.monthMap(
       _bills,
@@ -93,25 +114,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
           Text('未来 30 天', style: theme.textTheme.titleLarge),
           const SizedBox(height: 8),
           if (_upcoming.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('保险库状态良好'),
-              ),
-            )
+            const _GoodReminderRow()
           else
             for (final item in _upcoming)
               _ReminderTile(
                 key: ValueKey(item.id),
                 item: item,
-                onTap: () {
-                  final asset = _assets.where(
-                    (a) => a.id == item.id.split('@').first,
-                  );
-                  if (asset.isNotEmpty) {
-                    _openDetail(asset.first);
-                  }
-                },
+                onDetail: () => _openReminderDetail(item),
+                onDelaySevenDays: () =>
+                    _handleReminder(item, ReminderAction.delaySevenDays),
+                onNextMonth: () =>
+                    _handleReminder(item, ReminderAction.nextMonth),
               ),
           const SizedBox(height: 24),
           Card(
@@ -206,6 +219,37 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
     await _reload();
     widget.onDataChanged?.call();
+  }
+
+  Future<void> _openReminderDetail(ReminderItem item) async {
+    final assetId = item.id.split('@').first;
+    final asset = _assets.where((item) => item.id == assetId);
+    if (asset.isNotEmpty) {
+      await _openDetail(asset.first);
+    }
+  }
+
+  Future<void> _handleReminder(ReminderItem item, ReminderAction action) async {
+    final assetId = item.id.split('@').first;
+    final asset = _assets.where((item) => item.id == assetId).firstOrNull;
+    if (asset == null) {
+      return;
+    }
+    final updated = markReminderHandled(asset, action);
+    if (updated == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('这项没有可更新的日期')));
+      }
+      return;
+    }
+    await widget.repository.saveAsset(updated);
+    await _reload();
+    widget.onDataChanged?.call();
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已更新日期，临期事项已移出清单')));
+    }
   }
 }
 
@@ -348,11 +392,39 @@ class _BillTile extends StatelessWidget {
   );
 }
 
+class _GoodReminderRow extends StatelessWidget {
+  const _GoodReminderRow();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 56,
+    alignment: Alignment.centerLeft,
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: AppColors.rule)),
+    ),
+    child: const Row(
+      children: [
+        Icon(Icons.verified_outlined, size: 20, color: AppColors.ok),
+        SizedBox(width: 10),
+        Expanded(child: Text('保险库状态良好')),
+      ],
+    ),
+  );
+}
+
 class _ReminderTile extends StatelessWidget {
-  const _ReminderTile({super.key, required this.item, required this.onTap});
+  const _ReminderTile({
+    super.key,
+    required this.item,
+    required this.onDetail,
+    required this.onDelaySevenDays,
+    required this.onNextMonth,
+  });
 
   final ReminderItem item;
-  final VoidCallback onTap;
+  final VoidCallback onDetail;
+  final VoidCallback onDelaySevenDays;
+  final VoidCallback onNextMonth;
 
   @override
   Widget build(BuildContext context) {
@@ -366,26 +438,76 @@ class _ReminderTile extends StatelessWidget {
         )
         .inDays;
     final isBill = item.kind == 'bill';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Card(
-        child: ListTile(
-          leading: AssetTypeBadge(
-            type: isBill ? AssetType.bill : AssetType.subscription,
-            size: 28,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onDetail,
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppColors.rule)),
           ),
-          title: Text(item.title),
-          subtitle: Text(
-            '${DateFormat('M月d日').format(item.dueDate)} · ${isBill ? '账单' : '续期'}',
+          child: Row(
+            children: [
+              AssetTypeBadge(
+                type: isBill ? AssetType.bill : AssetType.subscription,
+                size: 28,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    Text(
+                      '${DateFormat('M月d日').format(item.dueDate)} · ${isBill ? '账单' : '续期'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: AppColors.dayTextSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                daysLeft == 0 ? '今天' : '$daysLeft 天后',
+                style: TextStyle(
+                  color: daysLeft <= 3 ? AppColors.danger : AppColors.ink2,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(width: 6),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(70, 44),
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: onNextMonth,
+                child: const Text('已处理'),
+              ),
+              PopupMenuButton<String>(
+                tooltip: '更多处理动作',
+                icon: const Icon(Icons.more_vert),
+                onSelected: (action) => switch (action) {
+                  'detail' => onDetail(),
+                  'week' => onDelaySevenDays(),
+                  _ => onNextMonth(),
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'detail', child: Text('查看详情')),
+                  PopupMenuItem(value: 'week', child: Text('推迟 7 天')),
+                  PopupMenuItem(value: 'month', child: Text('推到下个月')),
+                ],
+              ),
+            ],
           ),
-          trailing: Text(
-            daysLeft == 0 ? '今天' : '$daysLeft 天后',
-            style: TextStyle(
-              color: daysLeft <= 3 ? AppColors.danger : AppColors.ink2,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          onTap: onTap,
         ),
       ),
     );

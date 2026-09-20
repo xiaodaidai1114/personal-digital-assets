@@ -11,9 +11,11 @@ import 'graph_view_stub.dart'
 Widget buildGraphView({
   required List<Asset> assets,
   required List<Relation> relations,
+  Set<String> focusIds = const {},
   required ValueChanged<Asset> onOpenNode,
 }) => impl.buildGraphView(
   assets: assets,
   relations: relations,
+  focusIds: focusIds,
   onOpenNode: onOpenNode,
 );

@@ -5,6 +5,7 @@ import '../data/asset_repository.dart';
 import '../domain/asset.dart';
 import '../domain/asset_filter.dart';
 import '../domain/relation.dart';
+import '../domain/reminder_actions.dart';
 import '../theme/app_theme.dart';
 import '../vault/vault_controller.dart';
 import 'asset_detail_screen.dart';
@@ -38,6 +39,8 @@ class _AssetListScreenState extends State<AssetListScreen> {
   AssetFilter _filter = const AssetFilter();
   bool _loading = true;
   String? _error;
+  String? _selectedAssetId;
+  int _detailVersion = 0;
   final Set<String> _selectedAssetIds = {};
   bool _selectionMode = false;
 
@@ -126,12 +129,20 @@ class _AssetListScreenState extends State<AssetListScreen> {
           repository: widget.repository,
           onManageAssets: () => Navigator.of(context).pop(),
           initialFocusId: focusAssetId,
+          showBack: true,
         ),
       ),
     );
   }
 
   Future<void> _openDetail(String assetId) async {
+    if (MediaQuery.sizeOf(context).width >= 1024) {
+      setState(() {
+        _selectedAssetId = assetId;
+        _detailVersion++;
+      });
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AssetDetailScreen(
@@ -143,6 +154,30 @@ class _AssetListScreenState extends State<AssetListScreen> {
       ),
     );
     await _reload();
+  }
+
+  Future<void> _handleTask(_TaskData task) async {
+    final updated = markReminderHandled(task.asset, ReminderAction.nextMonth);
+    if (updated == null) {
+      return;
+    }
+    await widget.repository.saveAsset(updated);
+    await _reload();
+    widget.onDataChanged?.call();
+    if (mounted) {
+      setState(() => _detailVersion++);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已处理，临期事项已移出清单')));
+    }
+  }
+
+  Future<void> _clearDeletedDetail() async {
+    setState(() {
+      _selectedAssetId = null;
+      _detailVersion++;
+    });
+    await _reload();
+    widget.onDataChanged?.call();
   }
 
   Future<void> _togglePinned(Asset asset) async {
@@ -262,16 +297,19 @@ class _AssetListScreenState extends State<AssetListScreen> {
     final filtered = _filter.apply(_assets, _relations);
     final pinned = filtered.where((asset) => asset.isPinned).toList();
     final others = filtered.where((asset) => !asset.isPinned).toList();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final dueSoonCount = _assets
         .where(
           (asset) =>
               AssetFilter.dueDateOf(asset) != null &&
-              AssetFilter.dueDateOf(asset)!.isAfter(DateTime.now()) &&
+              !AssetFilter.dueDateOf(asset)!.isBefore(today) &&
               AssetFilter.dueDateOf(asset)!
-                  .isBefore(DateTime.now().add(const Duration(days: 30))),
+                  .isBefore(now.add(const Duration(days: 30))),
         )
         .length;
-    final tasks = _buildTasks(filtered, counts);
+    final tasks = _buildTasks(_assets);
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
 
     return Scaffold(
       appBar: AppBar(
@@ -321,6 +359,7 @@ class _AssetListScreenState extends State<AssetListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        tooltip: '新增资产',
         onPressed: () => _openEditor(),
         backgroundColor: AppColors.ink,
         foregroundColor: AppColors.sheet,
@@ -329,134 +368,252 @@ class _AssetListScreenState extends State<AssetListScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: const Icon(Icons.add),
       ),
-      body: Column(
-        children: [
-          _SearchHeader(
-            controller: _searchController,
-            filter: _filter,
-            resultCount: filtered.length,
-            dueSoonCount: dueSoonCount,
-            onOpenFilter: () => _openFilterSheet(),
-            onClear: () {
-              _searchController.clear();
-              setState(() => _filter = const AssetFilter());
-            },
-            onQuickType: (type) => setState(
-              () => _filter = _filter.copyWith(
-                types: _filter.types.contains(type) ? const {} : {type},
-                statuses: _filter.statuses
-                    .where((status) => status != AssetStatusFilter.pinned)
-                    .toSet(),
-              ),
-            ),
-            onQuickPinned: () => setState(
-              () => _filter = _filter.copyWith(
-                types: const {},
-                statuses: _filter.statuses.contains(AssetStatusFilter.pinned)
-                    ? _filter.statuses
-                          .where((status) => status != AssetStatusFilter.pinned)
-                          .toSet()
-                    : {..._filter.statuses, AssetStatusFilter.pinned},
-              ),
-            ),
-            onRemoveQuery: () {
-              _searchController.clear();
-            },
-            onRemoveType: (type) => setState(
-              () => _filter = _filter.copyWith(
-                types: _filter.types.where((item) => item != type).toSet(),
-              ),
-            ),
-            onRemoveIncludedTag: (tag) => setState(
-              () => _filter = _filter.copyWith(
-                includedTags: _filter.includedTags
-                    .where((item) => item != tag)
-                    .toSet(),
-              ),
-            ),
-            onRemoveExcludedTag: (tag) => setState(
-              () => _filter = _filter.copyWith(
-                excludedTags: _filter.excludedTags
-                    .where((item) => item != tag)
-                    .toSet(),
-              ),
-            ),
-            onRemoveStatus: (status) => setState(
-              () => _filter = _filter.copyWith(
-                statuses: _filter.statuses
-                    .where((item) => item != status)
-                    .toSet(),
-              ),
-            ),
-          ),
-          if (_loading)
-            const Expanded(child: _LoadingAssets())
-          else if (_error != null)
-            Expanded(
-              child: EmptyState(
-                icon: Icons.cloud_off_outlined,
-                title: '读取资产失败',
-                actionLabel: '重试',
-                onAction: _reload,
-              ),
+      body: isDesktop
+          ? _buildDesktopBody(
+              counts: counts,
+              filtered: filtered,
+              pinned: pinned,
+              others: others,
+              dueSoonCount: dueSoonCount,
+              tasks: tasks,
             )
-          else
-            Expanded(
-              child: filtered.isEmpty
-                  ? _buildEmptyResult()
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 96),
-                      children: [
-                        ...[
-                          const _SectionTitle('哨所'),
-                          if (tasks.isEmpty)
-                            const _GoodWatchtowerRow()
-                          else
-                            for (final task in tasks)
-                              _TaskCard(
-                                task: task,
-                                onView: () => _openDetail(task.asset.id),
-                              ),
-                          const SizedBox(height: 24),
-                        ],
-                        if (pinned.isNotEmpty) ...[
-                          const _SectionTitle('置顶'),
-                          for (final asset in pinned)
-                            _AssetRow(
-                              asset: asset,
-                              relationCount: counts[asset.id] ?? 0,
-                              selectionMode: _selectionMode,
-                              selected: _selectedAssetIds.contains(asset.id),
-                              onToggleSelected: () => _toggleSelection(asset),
-                              onTap: () => _selectionMode
-                                  ? _toggleSelection(asset)
-                                  : _openDetail(asset.id),
-                              onTogglePinned: () => _togglePinned(asset),
-                            ),
-                          const SizedBox(height: 20),
-                        ],
-                        if (others.isNotEmpty) ...[
-                          _SectionTitle(pinned.isEmpty ? '全部资产' : '更多资产'),
-                          for (final asset in others)
-                            _AssetRow(
-                              asset: asset,
-                              relationCount: counts[asset.id] ?? 0,
-                              selectionMode: _selectionMode,
-                              selected: _selectedAssetIds.contains(asset.id),
-                              onToggleSelected: () => _toggleSelection(asset),
-                              onTap: () => _selectionMode
-                                  ? _toggleSelection(asset)
-                                  : _openDetail(asset.id),
-                              onTogglePinned: () => _togglePinned(asset),
-                            ),
-                        ],
-                      ],
-                    ),
+          : _buildMainContent(
+              counts: counts,
+              filtered: filtered,
+              pinned: pinned,
+              others: others,
+              dueSoonCount: dueSoonCount,
+              tasks: tasks,
             ),
-        ],
+    );
+  }
+
+  Widget _buildDesktopBody({
+    required Map<String, int> counts,
+    required List<Asset> filtered,
+    required List<Asset> pinned,
+    required List<Asset> others,
+    required int dueSoonCount,
+    required List<_TaskData> tasks,
+  }) => Row(
+    children: [
+      SizedBox(
+        width: 220,
+        child: _CollectionsPane(
+          filter: _filter,
+          assets: _assets,
+          onToggleDueSoon: _toggleCollectionDueSoon,
+          onToggleType: _toggleCollectionType,
+          onToggleTag: _toggleCollectionTag,
+          onClear: () {
+            _searchController.clear();
+            setState(() => _filter = const AssetFilter());
+          },
+        ),
+      ),
+      Container(width: 1, color: AppColors.rule),
+      SizedBox(
+        width: 420,
+        child: _buildMainContent(
+          counts: counts,
+          filtered: filtered,
+          pinned: pinned,
+          others: others,
+          dueSoonCount: dueSoonCount,
+          tasks: tasks,
+        ),
+      ),
+      Container(width: 1, color: AppColors.rule),
+      Expanded(child: _buildDesktopDetailPane()),
+    ],
+  );
+
+  Widget _buildDesktopDetailPane() {
+    final assetId = _selectedAssetId;
+    if (assetId == null) {
+      return Container(
+        color: AppColors.paper,
+        child: const Center(
+          child: Text('选择左侧资产查看详情', style: TextStyle(color: AppColors.ink2)),
+        ),
+      );
+    }
+    return AssetDetailScreen(
+      key: ValueKey('asset-detail-$assetId-$_detailVersion'),
+      controller: widget.controller,
+      repository: widget.repository,
+      assetId: assetId,
+      embedded: true,
+      onDeleted: () {
+        _clearDeletedDetail();
+      },
+      onDataChanged: () {
+        _reload();
+        widget.onDataChanged?.call();
+      },
+      onOpenGraph: () => _openGraph(assetId),
+    );
+  }
+
+  void _toggleCollectionType(AssetType type) {
+    setState(
+      () => _filter = _filter.copyWith(
+        types: _filter.types.contains(type) ? const {} : {type},
+        statuses: _filter.statuses
+            .where((status) => status != AssetStatusFilter.pinned)
+            .toSet(),
       ),
     );
   }
+
+  void _toggleCollectionDueSoon() {
+    setState(() {
+      final statuses = {..._filter.statuses};
+      if (!statuses.remove(AssetStatusFilter.dueSoon)) {
+        statuses.add(AssetStatusFilter.dueSoon);
+      }
+      _filter = _filter.copyWith(statuses: statuses);
+    });
+  }
+
+  void _toggleCollectionTag(String tag) {
+    setState(() {
+      final included = {..._filter.includedTags};
+      final excluded = {..._filter.excludedTags}..remove(tag);
+      if (!included.remove(tag)) {
+        included.add(tag);
+      }
+      _filter = _filter.copyWith(
+        includedTags: included,
+        excludedTags: excluded,
+      );
+    });
+  }
+
+  Widget _buildMainContent({
+    required Map<String, int> counts,
+    required List<Asset> filtered,
+    required List<Asset> pinned,
+    required List<Asset> others,
+    required int dueSoonCount,
+    required List<_TaskData> tasks,
+  }) => Column(
+    children: [
+      _HomeWatchtower(
+        tasks: tasks,
+        onTask: _handleTask,
+        onTaskDetail: (task) => _openDetail(task.asset.id),
+      ),
+      _SearchHeader(
+        controller: _searchController,
+        filter: _filter,
+        resultCount: filtered.length,
+        dueSoonCount: dueSoonCount,
+        onOpenFilter: () => _openFilterSheet(),
+        onClear: () {
+          _searchController.clear();
+          setState(() => _filter = const AssetFilter());
+        },
+        onQuickType: (type) => setState(
+          () => _filter = _filter.copyWith(
+            types: _filter.types.contains(type) ? const {} : {type},
+            statuses: _filter.statuses
+                .where((status) => status != AssetStatusFilter.pinned)
+                .toSet(),
+          ),
+        ),
+        onQuickPinned: () => setState(
+          () => _filter = _filter.copyWith(
+            types: const {},
+            statuses: _filter.statuses.contains(AssetStatusFilter.pinned)
+                ? _filter.statuses
+                      .where((status) => status != AssetStatusFilter.pinned)
+                      .toSet()
+                : {..._filter.statuses, AssetStatusFilter.pinned},
+          ),
+        ),
+        onRemoveQuery: () {
+          _searchController.clear();
+        },
+        onRemoveType: (type) => setState(
+          () => _filter = _filter.copyWith(
+            types: _filter.types.where((item) => item != type).toSet(),
+          ),
+        ),
+        onRemoveIncludedTag: (tag) => setState(
+          () => _filter = _filter.copyWith(
+            includedTags: _filter.includedTags
+                .where((item) => item != tag)
+                .toSet(),
+          ),
+        ),
+        onRemoveExcludedTag: (tag) => setState(
+          () => _filter = _filter.copyWith(
+            excludedTags: _filter.excludedTags
+                .where((item) => item != tag)
+                .toSet(),
+          ),
+        ),
+        onRemoveStatus: (status) => setState(
+          () => _filter = _filter.copyWith(
+            statuses: _filter.statuses.where((item) => item != status).toSet(),
+          ),
+        ),
+      ),
+      if (_loading)
+        const Expanded(child: _LoadingAssets())
+      else if (_error != null)
+        Expanded(
+          child: EmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: '读取资产失败',
+            actionLabel: '重试',
+            onAction: _reload,
+          ),
+        )
+      else
+        Expanded(
+          child: filtered.isEmpty
+              ? _buildEmptyResult()
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 96),
+                  children: [
+                    if (pinned.isNotEmpty) ...[
+                      const _SectionTitle('置顶'),
+                      for (final asset in pinned)
+                        _AssetRow(
+                          asset: asset,
+                          relationCount: counts[asset.id] ?? 0,
+                          selectionMode: _selectionMode,
+                          selected: _selectedAssetIds.contains(asset.id),
+                          onToggleSelected: () => _toggleSelection(asset),
+                          onTap: () => _selectionMode
+                              ? _toggleSelection(asset)
+                              : _openDetail(asset.id),
+                          onTogglePinned: () => _togglePinned(asset),
+                        ),
+                      const SizedBox(height: 20),
+                    ],
+                    if (others.isNotEmpty) ...[
+                      _SectionTitle(pinned.isEmpty ? '全部资产' : '更多资产'),
+                      for (final asset in others)
+                        _AssetRow(
+                          asset: asset,
+                          relationCount: counts[asset.id] ?? 0,
+                          selectionMode: _selectionMode,
+                          selected: _selectedAssetIds.contains(asset.id),
+                          onToggleSelected: () => _toggleSelection(asset),
+                          onTap: () => _selectionMode
+                              ? _toggleSelection(asset)
+                              : _openDetail(asset.id),
+                          onTogglePinned: () => _togglePinned(asset),
+                        ),
+                    ],
+                  ],
+                ),
+        ),
+    ],
+  );
 
   Future<void> _openFilterSheet() async {
     final result = await showModalBottomSheet<AssetFilter>(
@@ -504,32 +661,26 @@ class _AssetListScreenState extends State<AssetListScreen> {
     );
   }
 
-  List<_TaskData> _buildTasks(
-    List<Asset> assets,
-    Map<String, int> relationCounts,
-  ) {
+  List<_TaskData> _buildTasks(List<Asset> assets) {
     final tasks = <_TaskData>[];
     final now = DateTime.now();
-    final titleCounts = <String, int>{};
-    for (final asset in assets) {
-      titleCounts[asset.title] = (titleCounts[asset.title] ?? 0) + 1;
-    }
+    final today = DateTime(now.year, now.month, now.day);
     for (final asset in assets) {
       final dueDate = AssetFilter.dueDateOf(asset);
-      if (dueDate != null && dueDate.isBefore(now)) {
+      if (dueDate != null && dueDate.isBefore(today)) {
         tasks.add(
           _TaskData(
             asset: asset,
             icon: Icons.event_busy_outlined,
             title: asset.title,
             message: '已逾期',
-            actionLabel: '处理',
+            actionLabel: '已处理',
             priority: 0,
           ),
         );
       }
       if (dueDate != null &&
-          dueDate.isAfter(now) &&
+          !dueDate.isBefore(today) &&
           dueDate.isBefore(now.add(const Duration(days: 7)))) {
         final amount = asset.fields['amount']?.toString();
         tasks.add(
@@ -540,44 +691,8 @@ class _AssetListScreenState extends State<AssetListScreen> {
             message:
                 '${DateFormat('M月d日').format(dueDate)}前扣款'
                 '${amount == null ? '' : ' · $amount'}',
-            actionLabel: '查看',
+            actionLabel: '已处理',
             priority: 0,
-          ),
-        );
-      }
-      if ((relationCounts[asset.id] ?? 0) == 0) {
-        tasks.add(
-          _TaskData(
-            asset: asset,
-            icon: Icons.link_off_outlined,
-            title: asset.title,
-            message: '还没有关联资产',
-            actionLabel: '关联',
-            priority: 4,
-          ),
-        );
-      }
-      if (asset.encryptedSecret == null) {
-        tasks.add(
-          _TaskData(
-            asset: asset,
-            icon: Icons.enhanced_encryption_outlined,
-            title: asset.title,
-            message: '敏感内容为空',
-            actionLabel: '补录',
-            priority: 2,
-          ),
-        );
-      }
-      if ((titleCounts[asset.title] ?? 0) > 1) {
-        tasks.add(
-          _TaskData(
-            asset: asset,
-            icon: Icons.copy_all_outlined,
-            title: asset.title,
-            message: '标题与其他资产重复',
-            actionLabel: '整理',
-            priority: 3,
           ),
         );
       }
@@ -1240,11 +1355,181 @@ class _GoodWatchtowerRow extends StatelessWidget {
   );
 }
 
+class _HomeWatchtower extends StatelessWidget {
+  const _HomeWatchtower({
+    required this.tasks,
+    required this.onTask,
+    required this.onTaskDetail,
+  });
+
+  final List<_TaskData> tasks;
+  final ValueChanged<_TaskData> onTask;
+  final ValueChanged<_TaskData> onTaskDetail;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.paper,
+    child: Column(
+      children: [
+        if (tasks.isEmpty)
+          const _GoodWatchtowerRow()
+        else
+          for (final task in tasks)
+            _TaskCard(
+              task: task,
+              onView: () => onTaskDetail(task),
+              onAction: () => onTask(task),
+            ),
+      ],
+    ),
+  );
+}
+
+class _CollectionsPane extends StatelessWidget {
+  const _CollectionsPane({
+    required this.filter,
+    required this.assets,
+    required this.onToggleDueSoon,
+    required this.onToggleType,
+    required this.onToggleTag,
+    required this.onClear,
+  });
+
+  final AssetFilter filter;
+  final List<Asset> assets;
+  final VoidCallback onToggleDueSoon;
+  final ValueChanged<AssetType> onToggleType;
+  final ValueChanged<String> onToggleTag;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final tags = assets.expand((asset) => asset.tags).toSet().toList()..sort();
+    return ColoredBox(
+      color: AppColors.paper,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+        children: [
+          Text('集合', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          _CollectionRow(
+            label: '全部',
+            count: assets.length,
+            selected: filter.isEmpty,
+            onTap: onClear,
+          ),
+          _CollectionRow(
+            label: AssetStatusFilter.dueSoon.label,
+            count: assets
+                .where(
+                  (asset) =>
+                      AssetFilter.dueDateOf(asset) != null &&
+                      !AssetFilter.dueDateOf(asset)!.isBefore(DateTime.now()) &&
+                      AssetFilter.dueDateOf(
+                        asset,
+                      )!.isBefore(DateTime.now().add(const Duration(days: 30))),
+                )
+                .length,
+            selected: filter.statuses.contains(AssetStatusFilter.dueSoon),
+            onTap: onToggleDueSoon,
+          ),
+          const SizedBox(height: 16),
+          Text('类型', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          for (final type in AssetType.values)
+            _CollectionRow(
+              label: type.label,
+              count: assets.where((asset) => asset.type == type).length,
+              selected: filter.types.contains(type),
+              onTap: () => onToggleType(type),
+            ),
+          if (tags.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('标签', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final tag in tags)
+                  FilterChip(
+                    label: Text(tag),
+                    selected: filter.includedTags.contains(tag),
+                    onSelected: (_) => onToggleTag(tag),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CollectionRow extends StatelessWidget {
+  const _CollectionRow({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.paper2 : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.ink : Colors.transparent,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            Text(
+              '$count',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.ink2,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class _TaskCard extends StatelessWidget {
-  const _TaskCard({required this.task, required this.onView});
+  const _TaskCard({
+    required this.task,
+    required this.onView,
+    required this.onAction,
+  });
 
   final _TaskData task;
   final VoidCallback onView;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -1292,7 +1577,7 @@ class _TaskCard extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   minimumSize: const Size(64, 44),
                 ),
-                onPressed: onView,
+                onPressed: onAction,
                 child: Text(task.actionLabel),
               ),
             ],
@@ -1436,7 +1721,7 @@ class _SkeletonRow extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Container(
-      height: 72,
+      height: 56,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(8),

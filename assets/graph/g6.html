@@ -26,8 +26,12 @@
 
   function loadGraph(jsonText) {
     var payload = JSON.parse(jsonText);
+    var focusSet = {};
+    (payload.focusIds || []).forEach(function(id) { focusSet[id] = true; });
+    var hasFocus = Object.keys(focusSet).length > 0;
     var nodes = payload.nodes.map(function(node) {
       var size = nodeSize({ data: node });
+      var focused = !hasFocus || !!focusSet[node.id];
       return {
         id: node.id,
         type: node.shape,
@@ -35,11 +39,12 @@
         style: {
           size: size,
           fill: node.color,
-          fillOpacity: 0,
+          fillOpacity: focused ? 0 : 0.03,
           stroke: node.color,
+          strokeOpacity: focused ? 1 : 0.16,
           lineWidth: node.pinned ? 2 : 1.5,
           labelText: node.title,
-          labelFill: '#F5F7FF',
+          labelFill: focused ? '#F5F7FF' : 'rgba(245,247,255,.18)',
           labelFontSize: Math.max(10, Math.min(12, 8 + size * .11)),
           labelFontWeight: node.pinned ? 600 : 400,
           labelPlacement: 'bottom',
@@ -47,19 +52,21 @@
           labelBackground: true,
           labelBackgroundFill: 'rgba(9,15,30,0.72)',
           labelBackgroundRadius: 5,
-          labelBackgroundOpacity: 0,
+          labelBackgroundOpacity: focused ? 0 : 0,
+          labelOpacity: focused ? 1 : .18,
           shadowBlur: 0
         }
       };
     });
     var edges = payload.edges.map(function(edge) {
+      var focused = !hasFocus || !!focusSet[edge.from] || !!focusSet[edge.to];
       return {
         source: edge.from,
         target: edge.to,
         data: edge,
         style: {
           stroke: relationColor(edge.kind),
-          strokeOpacity: 0.38,
+          strokeOpacity: focused ? 0.38 : 0.08,
           lineWidth: 1,
           endArrow: true,
           endArrowSize: 5,

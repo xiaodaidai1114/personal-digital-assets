@@ -18,12 +18,14 @@ class GraphScreen extends StatefulWidget {
     required this.repository,
     required this.onManageAssets,
     this.initialFocusId,
+    this.showBack = false,
   });
 
   final VaultController controller;
   final AssetRepository repository;
   final VoidCallback onManageAssets;
   final String? initialFocusId;
+  final bool showBack;
 
   @override
   State<GraphScreen> createState() => _GraphScreenState();
@@ -110,6 +112,8 @@ class _GraphScreenState extends State<GraphScreen> {
               : (asset) => _selectedTypes.contains(asset.type),
         )
         .toList();
+    final nodeIds = nodes.map((asset) => asset.id).toSet();
+    var focusIds = <String>{};
     if (query.trim().isNotEmpty) {
       final matchingIds = nodes
           .where((asset) => _matches(asset, query))
@@ -124,9 +128,8 @@ class _GraphScreenState extends State<GraphScreen> {
           neighborIds.add(relation.fromAssetId);
         }
       }
-      nodes = nodes.where((asset) => neighborIds.contains(asset.id)).toList();
+      focusIds = neighborIds.intersection(nodeIds);
     }
-    final nodeIds = nodes.map((asset) => asset.id).toSet();
     final edges = _relations
         .where(
           (relation) =>
@@ -136,7 +139,7 @@ class _GraphScreenState extends State<GraphScreen> {
                   _selectedRelationTypes.contains(relation.type)),
         )
         .toList();
-    return _GraphSelection(nodes, edges);
+    return _GraphSelection(nodes, edges, focusIds);
   }
 
   int get _filterCount => [
@@ -278,6 +281,9 @@ class _GraphScreenState extends State<GraphScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _GraphSearchHeader(
+                onBack: widget.showBack
+                    ? () => Navigator.of(context).pop()
+                    : null,
                 controller: _searchController,
                 filterCount: _filterCount,
                 nodeCount: _selection.nodes.length,
@@ -356,6 +362,7 @@ class _GraphScreenState extends State<GraphScreen> {
         buildGraphView(
           assets: selection.nodes,
           relations: selection.edges,
+          focusIds: selection.focusIds,
           onOpenNode: _openNode,
         ),
         if (selection.edges.isEmpty)
@@ -381,10 +388,11 @@ class _GraphScreenState extends State<GraphScreen> {
 }
 
 class _GraphSelection {
-  const _GraphSelection(this.nodes, this.edges);
+  const _GraphSelection(this.nodes, this.edges, this.focusIds);
 
   final List<Asset> nodes;
   final List<Relation> edges;
+  final Set<String> focusIds;
 }
 
 class _GraphFilterDraft {
@@ -396,6 +404,7 @@ class _GraphFilterDraft {
 
 class _GraphSearchHeader extends StatelessWidget {
   const _GraphSearchHeader({
+    this.onBack,
     required this.controller,
     required this.filterCount,
     required this.nodeCount,
@@ -405,6 +414,7 @@ class _GraphSearchHeader extends StatelessWidget {
     required this.onClear,
   });
 
+  final VoidCallback? onBack;
   final TextEditingController controller;
   final int filterCount;
   final int nodeCount;
@@ -421,6 +431,17 @@ class _GraphSearchHeader extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (onBack != null) ...[
+                Tooltip(
+                  message: '返回详情',
+                  child: IconButton(
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back),
+                    color: AppColors.nightTextPrimary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
               Expanded(
                 child: TextField(
                   controller: controller,
@@ -436,12 +457,9 @@ class _GraphSearchHeader extends StatelessWidget {
                       color: AppColors.nightTextSecondary,
                     ),
                     suffixIcon: controller.text.isEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.close),
-                            color: AppColors.nightTextSecondary,
-                            onPressed: onClear,
-                          )
+                        ? null
                         : IconButton(
+                            tooltip: '清除节点搜索',
                             icon: const Icon(Icons.close),
                             color: AppColors.nightTextSecondary,
                             onPressed: () {

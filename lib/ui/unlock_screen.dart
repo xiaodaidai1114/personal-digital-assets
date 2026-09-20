@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../theme/app_theme.dart';
 import '../vault/vault_controller.dart';
@@ -166,6 +167,23 @@ class _UnlockScreenState extends State<UnlockScreen>
                         style: Theme.of(context).textTheme.bodyMedium
                             ?.copyWith(color: AppColors.dayTextSecondary),
                       ),
+                      if (kIsWeb) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.paper2,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Web 预览：数据仅保存在本次浏览器会话，正式数据请使用 Android 应用。',
+                            style: TextStyle(color: AppColors.ink2),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       TextFormField(
                         controller: _passwordController,

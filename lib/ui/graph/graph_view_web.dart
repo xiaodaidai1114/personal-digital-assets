@@ -7,9 +7,11 @@ import 'native_graph_view.dart';
 Widget buildGraphView({
   required List<Asset> assets,
   required List<Relation> relations,
+  Set<String> focusIds = const {},
   required ValueChanged<Asset> onOpenNode,
 }) => NativeGraphView(
   assets: assets,
   relations: relations,
+  focusIds: focusIds,
   onOpenNode: onOpenNode,
 );

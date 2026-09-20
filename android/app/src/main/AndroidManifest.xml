@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 检查 GitHub Release 更新 -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- 账单/续期提醒通知 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 本地通知调度 -->

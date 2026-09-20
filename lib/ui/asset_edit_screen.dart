@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/asset_repository.dart';
 import '../domain/asset.dart';
+import '../domain/asset_field_policy.dart';
 import '../theme/app_theme.dart';
 import '../vault/vault_controller.dart';
 import 'widgets/asset_type_badge.dart';
@@ -36,6 +37,7 @@ class _AssetEditScreenState extends State<AssetEditScreen> {
   final _tags = <String>{};
   final _suggestedTags = <String>[];
   late AssetType _type;
+  String? _tagError;
   bool _busy = false;
   bool _editingSecret = false;
 
@@ -100,6 +102,7 @@ class _AssetEditScreenState extends State<AssetEditScreen> {
       _tags.addAll(newTags);
       _suggestedTags.removeWhere(newTags.contains);
       _tagInputController.clear();
+      _tagError = null;
     });
   }
 
@@ -111,20 +114,47 @@ class _AssetEditScreenState extends State<AssetEditScreen> {
     setState(() {
       _tags.add(normalizedTag);
       _suggestedTags.remove(normalizedTag);
+      _tagError = null;
     });
   }
 
   void _removeTag(String tag) {
     setState(() {
       _tags.remove(tag);
+      _tagError = null;
       if (_suggestedTags.length < 8) {
         _suggestedTags.add(tag);
       }
     });
   }
 
+  void _selectType(AssetType type) {
+    if (type == _type) {
+      return;
+    }
+    final currentKeys =
+        fieldTemplates[type]?.map((item) => item.key).toSet() ??
+        const <String>{};
+    final staleKeys = fieldTemplates.values
+        .expand((fields) => fields)
+        .map((field) => field.key)
+        .where((key) => !currentKeys.contains(key))
+        .toSet();
+    for (final key in staleKeys) {
+      _fieldControllers[key]?.clear();
+    }
+    setState(() => _type = type);
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    final sensitiveTag = _tags
+        .map((tag) => AssetFieldPolicy.sensitivePlainTextError(tag))
+        .firstWhere((error) => error != null, orElse: () => null);
+    if (sensitiveTag != null) {
+      setState(() => _tagError = sensitiveTag);
       return;
     }
     setState(() => _busy = true);
@@ -134,8 +164,18 @@ class _AssetEditScreenState extends State<AssetEditScreen> {
           ? widget.asset?.encryptedSecret
           : await widget.controller.encryptSecret(secretText);
       final fields = Map<String, dynamic>.from(widget.asset?.fields ?? {});
-      for (final template
-          in fieldTemplates[_type] ?? const <_FieldTemplate>[]) {
+      final templates = fieldTemplates[_type] ?? const <_FieldTemplate>[];
+      final currentKeys = templates.map((template) => template.key).toSet();
+      final managedKeys = fieldTemplates.values
+          .expand((items) => items)
+          .map((template) => template.key)
+          .toSet();
+      fields.removeWhere(
+        (key, value) =>
+            currentKeys.contains(key) ||
+            managedKeys.difference(currentKeys).contains(key),
+      );
+      for (final template in templates) {
         final value = _fieldControllers[template.key]?.text.trim();
         if (value != null && value.isNotEmpty) {
           fields[template.key] = value;
@@ -190,7 +230,7 @@ class _AssetEditScreenState extends State<AssetEditScreen> {
                 _TypePickerChip(
                   type: type,
                   selected: type == _type,
-                  onTap: () => setState(() => _type = type),
+                  onTap: () => _selectType(type),
                 ),
             ],
           ),
@@ -201,8 +241,9 @@ class _AssetEditScreenState extends State<AssetEditScreen> {
               labelText: '名称',
               prefixIcon: Icon(Icons.label_outline),
             ),
-            validator: (value) =>
-                (value == null || value.trim().isEmpty) ? '请填写名称' : null,
+            validator: (value) => (value == null || value.trim().isEmpty)
+                ? '请填写名称'
+                : AssetFieldPolicy.sensitivePlainTextError(value.trim()),
           ),
           const SizedBox(height: 12),
           Text('标签', style: Theme.of(context).textTheme.titleMedium),
@@ -211,6 +252,7 @@ class _AssetEditScreenState extends State<AssetEditScreen> {
             controller: _tagInputController,
             tags: _tags.toList(),
             suggestions: _suggestedTags,
+            errorText: _tagError,
             onSubmitted: _commitTagInput,
             onChanged: (value) {
               if (RegExp(r'[,，\n]\s*$').hasMatch(value)) {
@@ -269,6 +311,8 @@ class _AssetEditScreenState extends State<AssetEditScreen> {
             helperText: template.helper,
             prefixIcon: Icon(template.icon),
           ),
+          validator: (value) =>
+              AssetFieldPolicy.plainFieldError(template.key, value ?? ''),
         ),
         const SizedBox(height: 12),
       ],
@@ -333,6 +377,7 @@ class _TagField extends StatelessWidget {
     required this.controller,
     required this.tags,
     required this.suggestions,
+    this.errorText,
     required this.onSubmitted,
     required this.onChanged,
     required this.onDeleted,
@@ -342,6 +387,7 @@ class _TagField extends StatelessWidget {
   final TextEditingController controller;
   final List<String> tags;
   final List<String> suggestions;
+  final String? errorText;
   final VoidCallback onSubmitted;
   final ValueChanged<String> onChanged;
   final ValueChanged<String> onDeleted;
@@ -356,9 +402,10 @@ class _TagField extends StatelessWidget {
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => onSubmitted(),
         onChanged: onChanged,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: '输入后回车或逗号添加',
           prefixIcon: Icon(Icons.sell_outlined),
+          errorText: errorText,
         ),
       ),
       if (tags.isNotEmpty) ...[
