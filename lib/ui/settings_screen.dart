@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-import '../theme/app_theme.dart';
+import '../app_services.dart';
 import '../vault/vault_controller.dart';
+import '../data/backup/backup_service.dart';
+import '../theme/app_theme.dart';
 
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.controller});
+/// 设置：安全（锁定/自动锁定/生物识别）、数据（加密备份导出与恢复）、关于。
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key, required this.services});
 
-  final VaultController controller;
+  final AppServices services;
 
-  Future<void> _confirmLock(BuildContext context) async {
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _busy = false;
+
+  Future<void> _confirmLock() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('立即锁定'),
-        content: const Text('锁定后会丢弃内存中的密钥，需要主密码重新解锁。'),
+        content: const Text('锁定后会丢弃内存中的密钥，需要主密码或生物识别重新解锁。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -28,80 +39,299 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      controller.lock();
+      widget.services.controller.lock();
+    }
+  }
+
+  Future<void> _pickAutoLock() async {
+    final store = widget.services.settingsStore;
+    final current = await store.autoLockDelay();
+    if (!mounted) {
+      return;
+    }
+    _AutoLockOption? currentOption;
+    for (final option in _AutoLockOption.values) {
+      if (option.delay == current) {
+        currentOption = option;
+        break;
+      }
+    }
+    final selected = await showModalBottomSheet<_AutoLockOption>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      builder: (context) => SafeArea(
+        child: RadioGroup<_AutoLockOption>(
+          groupValue: currentOption,
+          onChanged: (value) => Navigator.of(context).pop(value),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final option in _AutoLockOption.values)
+                RadioListTile<_AutoLockOption>(
+                  title: Text(option.label),
+                  value: option,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null) {
+      await store.setAutoLockDelay(selected.delay);
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _exportBackup() async {
+    final cipher = widget.services.controller.cipher;
+    if (cipher == null) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final assets = await widget.services.repository.listAssets();
+      final relations = await widget.services.repository.listRelations();
+      final content = await BackupService(cipher)
+          .exportEncrypted(assets, relations);
+      final filename =
+          'airy-vault-backup-${DateFormat('yyyyMMdd').format(DateTime.now())}.avbak';
+      await widget.services.backupFileStore.exportFile(content, filename);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('加密备份已导出：$filename（仅含密文）')));
+      }
+    } on Exception {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('备份导出失败')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    final cipher = widget.services.controller.cipher;
+    if (cipher == null) {
+      return;
+    }
+    final content = await widget.services.backupFileStore.pickAndRead();
+    if (content == null || !mounted) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('从备份恢复'),
+        content: const Text('将把备份中的资产与关联合并进当前数据（同 ID 覆盖）。确定继续吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('恢复'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final backup = await BackupService(cipher).importEncrypted(content);
+      for (final asset in backup.assets) {
+        await widget.services.repository.saveAsset(asset);
+      }
+      for (final relation in backup.relations) {
+        await widget.services.repository.saveRelation(relation);
+      }
+      await widget.services.syncReminders();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '已恢复 ${backup.assets.length} 条资产、${backup.relations.length} 条关联',
+            ),
+          ),
+        );
+      }
+    } on Exception {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('恢复失败：备份文件无效或主密码不匹配')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('设置')),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _SectionTitle('安全'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.danger,
-                    side: const BorderSide(color: AppColors.danger),
-                  ),
-                  onPressed: () => _confirmLock(context),
-                  icon: const Icon(Icons.lock_outline),
-                  label: const Text('立即锁定'),
-                ),
+    appBar: AppBar(title: const Text('设置')),
+    body: ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const _SectionTitle('安全'),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.danger,
+                side: const BorderSide(color: AppColors.danger),
               ),
+              onPressed: _confirmLock,
+              icon: const Icon(Icons.lock_outline),
+              label: const Text('立即锁定'),
             ),
-            Card(
-              child: Column(
-                children: const [
-                  ListTile(
-                    enabled: false,
-                    leading: Icon(Icons.timer_outlined),
-                    title: Text('自动锁定时长'),
-                    subtitle: Text('规划中'),
-                    trailing: Icon(Icons.chevron_right),
-                  ),
-                  Divider(height: 1),
-                  ListTile(
-                    enabled: false,
-                    leading: Icon(Icons.fingerprint),
-                    title: Text('生物识别解锁'),
-                    subtitle: Text('规划中'),
-                    trailing: Icon(Icons.chevron_right),
-                  ),
-                ],
-              ),
-            ),
-            const _SectionTitle('数据'),
-            const Card(
-              child: ListTile(
-                enabled: false,
-                leading: Icon(Icons.backup_outlined),
-                title: Text('加密备份导出'),
-                subtitle: Text('规划中 · 只导出密文'),
-                trailing: Icon(Icons.chevron_right),
-              ),
-            ),
-            const _SectionTitle('关于'),
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('当前版本'),
-                subtitle: Text('v1.0.0 · MVP 设计迭代'),
-              ),
-            ),
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.route_outlined),
-                title: Text('路线图阶段'),
-                subtitle: Text('设计系统落地 → 加密持久化 → G6 图谱 → 关系编辑'),
-              ),
-            ),
-          ],
+          ),
         ),
+        Card(
+          child: Column(
+            children: [
+              FutureBuilder<Duration?>(
+                future: widget.services.settingsStore.autoLockDelay(),
+                builder: (context, snapshot) {
+                  final delay = snapshot.data;
+                  return ListTile(
+                    leading: const Icon(Icons.timer_outlined),
+                    title: const Text('自动锁定时长'),
+                    subtitle: Text(_describeDelay(delay)),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _pickAutoLock,
+                  );
+                },
+              ),
+              const Divider(height: 1),
+              _BiometricTile(controller: widget.services.controller),
+            ],
+          ),
+        ),
+        const _SectionTitle('数据'),
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                enabled: !_busy,
+                leading: const Icon(Icons.backup_outlined),
+                title: const Text('导出加密备份'),
+                subtitle: const Text('仅导出密文，不含任何明文'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _exportBackup,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                enabled: !_busy,
+                leading: const Icon(Icons.restore_outlined),
+                title: const Text('从备份恢复'),
+                subtitle: const Text('选择 .avbak 备份文件合并恢复'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _restoreBackup,
+              ),
+            ],
+          ),
+        ),
+        const _SectionTitle('关于'),
+        const Card(
+          child: ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('当前版本'),
+            subtitle: Text('v1.1.0 · 纸墨加密账册'),
+          ),
+        ),
+        const Card(
+          child: ListTile(
+            leading: Icon(Icons.route_outlined),
+            title: Text('路线图阶段'),
+            subtitle: Text('SQLCipher 持久化 ✓ · G6 图谱 ✓ · 账单日历 ✓ · 加密备份 ✓'),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  String _describeDelay(Duration? delay) {
+    if (delay == null) {
+      return '永不自动锁定';
+    }
+    if (delay == Duration.zero) {
+      return '立即锁定';
+    }
+    if (delay.inMinutes >= 1) {
+      return '${delay.inMinutes} 分钟无操作后锁定';
+    }
+    return '${delay.inSeconds} 秒无操作后锁定';
+  }
+}
+
+enum _AutoLockOption {
+  never('永不自动锁定', null),
+  immediate('立即锁定', Duration.zero),
+  oneMinute('1 分钟后', Duration(minutes: 1)),
+  fiveMinutes('5 分钟后', Duration(minutes: 5)),
+  fifteenMinutes('15 分钟后', Duration(minutes: 15));
+
+  const _AutoLockOption(this.label, this.delay);
+
+  final String label;
+  final Duration? delay;
+}
+
+/// 生物识别开关：读取可用性与开启状态，切换时托管/清除密钥。
+class _BiometricTile extends StatefulWidget {
+  const _BiometricTile({required this.controller});
+
+  final VaultController controller;
+
+  @override
+  State<_BiometricTile> createState() => _BiometricTileState();
+}
+
+class _BiometricTileState extends State<_BiometricTile> {
+  @override
+  Widget build(BuildContext context) => FutureBuilder<(bool, bool)>(
+    future: () async {
+      final available = await widget.controller.canUseBiometric();
+      final enabled = available && await widget.controller.isBiometricEnabled();
+      return (available, enabled);
+    }(),
+    builder: (context, snapshot) {
+      final available = snapshot.data?.$1 ?? false;
+      final enabled = snapshot.data?.$2 ?? false;
+      return SwitchListTile(
+        secondary: const Icon(Icons.fingerprint),
+        title: const Text('生物识别解锁'),
+        subtitle: Text(
+          !available
+              ? '当前设备或系统不支持'
+              : enabled
+              ? '已开启'
+              : '开启后可用指纹/面容快速解锁',
+        ),
+        value: enabled,
+        onChanged: available
+            ? (value) async {
+                await widget.controller.setBiometricEnabled(value);
+                if (mounted) {
+                  setState(() {});
+                }
+              }
+            : null,
       );
+    },
+  );
 }
 
 class _SectionTitle extends StatelessWidget {
@@ -111,7 +341,7 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
-        child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-      );
+    padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+    child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+  );
 }

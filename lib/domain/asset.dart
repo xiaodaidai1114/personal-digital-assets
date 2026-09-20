@@ -17,9 +17,9 @@ enum AssetType {
   final String label;
 
   static AssetType fromName(String value) => AssetType.values.firstWhere(
-        (type) => type.name == value,
-        orElse: () => AssetType.other,
-      );
+    (type) => type.name == value,
+    orElse: () => AssetType.other,
+  );
 }
 
 /// 资产节点。敏感内容只保存加密后的密文（EncryptedPayload JSON），明文永不进入本模型。
@@ -31,10 +31,11 @@ class Asset {
     this.fields = const {},
     this.tags = const [],
     this.encryptedSecret,
+    this.isPinned = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 
   final String id;
   final AssetType type;
@@ -42,32 +43,35 @@ class Asset {
   final Map<String, dynamic> fields;
   final List<String> tags;
   final String? encryptedSecret;
+  final bool isPinned;
   final DateTime createdAt;
   final DateTime updatedAt;
 
   factory Asset.fromJson(Map<String, dynamic> json) => Asset(
-        id: json['id'] as String,
-        type: AssetType.fromName(json['type'] as String),
-        title: json['title'] as String,
-        fields: (json['fields'] as Map<String, dynamic>?) ?? const {},
-        tags: ((json['tags'] as List<dynamic>?) ?? const <dynamic>[])
-            .map((tag) => tag as String)
-            .toList(),
-        encryptedSecret: json['encryptedSecret'] as String?,
-        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
-        updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
-      );
+    id: json['id'] as String,
+    type: AssetType.fromName(json['type'] as String),
+    title: json['title'] as String,
+    fields: (json['fields'] as Map<String, dynamic>?) ?? const {},
+    tags: ((json['tags'] as List<dynamic>?) ?? const <dynamic>[])
+        .map((tag) => tag as String)
+        .toList(),
+    encryptedSecret: json['encryptedSecret'] as String?,
+    isPinned: json['isPinned'] == true,
+    createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+    updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'type': type.name,
-        'title': title,
-        'fields': fields,
-        'tags': tags,
-        'encryptedSecret': encryptedSecret,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'type': type.name,
+    'title': title,
+    'fields': fields,
+    'tags': tags,
+    'encryptedSecret': encryptedSecret,
+    'isPinned': isPinned,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   Asset copyWith({
     String? id,
@@ -76,19 +80,20 @@ class Asset {
     Map<String, dynamic>? fields,
     List<String>? tags,
     String? encryptedSecret,
+    bool? isPinned,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) =>
-      Asset(
-        id: id ?? this.id,
-        type: type ?? this.type,
-        title: title ?? this.title,
-        fields: fields ?? this.fields,
-        tags: tags ?? this.tags,
-        encryptedSecret: encryptedSecret ?? this.encryptedSecret,
-        createdAt: createdAt ?? this.createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-      );
+  }) => Asset(
+    id: id ?? this.id,
+    type: type ?? this.type,
+    title: title ?? this.title,
+    fields: fields ?? this.fields,
+    tags: tags ?? this.tags,
+    encryptedSecret: encryptedSecret ?? this.encryptedSecret,
+    isPinned: isPinned ?? this.isPinned,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
 
   @override
   String toString() => jsonEncode(toJson());

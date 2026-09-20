@@ -21,8 +21,7 @@ class MemoryAssetRepository implements AssetRepository {
   Future<void> deleteAsset(String id) async {
     _assets.remove(id);
     _relations.removeWhere(
-      (_, relation) =>
-          relation.fromAssetId == id || relation.toAssetId == id,
+      (_, relation) => relation.fromAssetId == id || relation.toAssetId == id,
     );
   }
 

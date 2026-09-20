@@ -14,11 +14,10 @@ enum RelationType {
 
   final String label;
 
-  static RelationType fromName(String value) =>
-      RelationType.values.firstWhere(
-        (type) => type.name == value,
-        orElse: () => RelationType.relatesTo,
-      );
+  static RelationType fromName(String value) => RelationType.values.firstWhere(
+    (type) => type.name == value,
+    orElse: () => RelationType.relatesTo,
+  );
 }
 
 /// 关系边：从 fromAsset 指向 toAsset。
@@ -40,20 +39,20 @@ class Relation {
   final DateTime createdAt;
 
   factory Relation.fromJson(Map<String, dynamic> json) => Relation(
-        id: json['id'] as String,
-        fromAssetId: json['fromAssetId'] as String,
-        toAssetId: json['toAssetId'] as String,
-        type: RelationType.fromName(json['type'] as String),
-        note: json['note'] as String?,
-        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
-      );
+    id: json['id'] as String,
+    fromAssetId: json['fromAssetId'] as String,
+    toAssetId: json['toAssetId'] as String,
+    type: RelationType.fromName(json['type'] as String),
+    note: json['note'] as String?,
+    createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'fromAssetId': fromAssetId,
-        'toAssetId': toAssetId,
-        'type': type.name,
-        'note': note,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'fromAssetId': fromAssetId,
+    'toAssetId': toAssetId,
+    'type': type.name,
+    'note': note,
+    'createdAt': createdAt.toIso8601String(),
+  };
 }

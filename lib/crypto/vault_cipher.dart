@@ -25,11 +25,11 @@ class EncryptedPayload {
       );
 
   Map<String, dynamic> toJson() => {
-        'version': version,
-        'nonce': base64Encode(nonce),
-        'cipherText': base64Encode(cipherText),
-        'mac': base64Encode(mac),
-      };
+    'version': version,
+    'nonce': base64Encode(nonce),
+    'cipherText': base64Encode(cipherText),
+    'mac': base64Encode(mac),
+  };
 
   String serialize() => jsonEncode(toJson());
 
@@ -71,4 +71,7 @@ class VaultCipher {
     );
     return utf8.decode(clearText);
   }
+
+  /// 取出密钥字节，仅用于把密钥托管到系统安全存储（生物识别解锁）。
+  Future<List<int>> extractBytes() => _key.extractBytes();
 }

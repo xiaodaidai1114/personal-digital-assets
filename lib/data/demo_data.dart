@@ -2,17 +2,18 @@ import 'package:uuid/uuid.dart';
 
 import '../domain/asset.dart';
 import '../domain/relation.dart';
-import 'memory_asset_repository.dart';
+import 'asset_repository.dart';
 
-/// 写入演示数据。全部为虚构占位内容，不含任何真实个人信息。
-Future<MemoryAssetRepository> seedDemoData() async {
-  final repository = MemoryAssetRepository();
+/// 向仓库写入演示数据。全部为虚构占位内容，不含任何真实个人信息。
+/// 仅在新装（仓库为空）时调用。
+Future<void> seedDemoData(AssetRepository repository) async {
   const uuid = Uuid();
   final emailId = uuid.v4();
   final subscriptionId = uuid.v4();
   final apiKeyId = uuid.v4();
   final deviceId = uuid.v4();
   final billId = uuid.v4();
+  final passwordId = uuid.v4();
 
   final assets = [
     Asset(
@@ -40,6 +41,14 @@ Future<MemoryAssetRepository> seedDemoData() async {
       title: 'AI 助手 API Key',
       fields: {'prefix': 'sk-FAKE'},
       tags: ['演示', 'AI'],
+      isPinned: true,
+    ),
+    Asset(
+      id: passwordId,
+      type: AssetType.password,
+      title: '示例网站密码',
+      fields: {'username': 'user@example.com', 'url': 'https://example.com'},
+      tags: ['演示'],
     ),
     Asset(
       id: deviceId,
@@ -85,9 +94,14 @@ Future<MemoryAssetRepository> seedDemoData() async {
       toAssetId: deviceId,
       type: RelationType.storedOn,
     ),
+    Relation(
+      id: uuid.v4(),
+      fromAssetId: passwordId,
+      toAssetId: emailId,
+      type: RelationType.recovers,
+    ),
   ];
   for (final relation in relations) {
     await repository.saveRelation(relation);
   }
-  return repository;
 }

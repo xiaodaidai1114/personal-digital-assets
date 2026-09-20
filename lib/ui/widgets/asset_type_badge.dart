@@ -26,9 +26,11 @@ class AssetTypeBadge extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: .12),
         shape: BoxShape.circle,
-        border: selected ? Border.all(color: color, width: 2) : null,
+        border: Border.all(
+          color: selected ? AppColors.ink : color,
+          width: selected ? 2 : 1.5,
+        ),
       ),
       child: Icon(_icon, color: color, size: size * .52),
     );
@@ -36,13 +38,13 @@ class AssetTypeBadge extends StatelessWidget {
 }
 
 IconData assetTypeIcon(AssetType type) => switch (type) {
-      AssetType.email => Icons.mail_outline,
-      AssetType.subscription => Icons.autorenew,
-      AssetType.apiKey => Icons.key_outlined,
-      AssetType.password => Icons.password_outlined,
-      AssetType.device => Icons.devices_outlined,
-      AssetType.item => Icons.inventory_2_outlined,
-      AssetType.bill => Icons.receipt_long_outlined,
-      AssetType.bankCard => Icons.credit_card,
-      AssetType.other => Icons.category_outlined,
-    };
+  AssetType.email => Icons.mail_outline,
+  AssetType.subscription => Icons.autorenew,
+  AssetType.apiKey => Icons.key_outlined,
+  AssetType.password => Icons.password_outlined,
+  AssetType.device => Icons.devices_outlined,
+  AssetType.item => Icons.inventory_2_outlined,
+  AssetType.bill => Icons.receipt_long_outlined,
+  AssetType.bankCard => Icons.credit_card,
+  AssetType.other => Icons.category_outlined,
+};

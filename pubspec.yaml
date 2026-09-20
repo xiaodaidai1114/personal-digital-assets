@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.13.4
@@ -38,6 +38,31 @@ dependencies:
 
   uuid: ^4.5.1
 
+  # SQLCipher 加密 SQLite 持久化（AGENTS.md 技术栈已定）
+  sqflite_sqlcipher: ^3.2.0
+  # SQL 层抽象（sqflite_sqlcipher 底层同样依赖）
+  sqflite_common: ^2.5.13
+  # 本地通知时区计算（flutter_local_notifications 底层依赖）
+  timezone: ^0.10.1
+  # 数据库与备份文件路径
+  path_provider: ^2.1.5
+  # 盐值/校验数据/生物识别包裹密钥托管（Android Keystore）
+  flutter_secure_storage: ^9.2.4
+  # 生物识别解锁
+  local_auth: ^2.3.0
+  # 账单与续期到期提醒通知
+  flutter_local_notifications: ^19.1.0
+  # Android 端 G6 图谱容器
+  webview_flutter: ^4.13.0
+  # 加密备份导出分享
+  share_plus: ^11.1.0
+  # 备份文件选择导入
+  file_picker: ^10.1.2
+  # 应用设置（自动锁定时长等）
+  shared_preferences: ^2.5.3
+  # 日历日期格式化
+  intl: ^0.20.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -47,6 +72,9 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
+  # 测试环境用 ffi 工厂验证 SQL 层
+  sqflite_common_ffi: ^2.3.5
+
   flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
@@ -59,6 +87,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/graph/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

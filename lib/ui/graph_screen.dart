@@ -1,14 +1,13 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
-import '../data/memory_asset_repository.dart';
+import '../data/asset_repository.dart';
 import '../domain/asset.dart';
 import '../domain/relation.dart';
 import '../theme/app_theme.dart';
 import '../vault/vault_controller.dart';
 import 'asset_detail_screen.dart';
 import 'asset_edit_screen.dart';
+import 'graph/graph_view.dart';
 import 'widgets/asset_type_badge.dart';
 import 'widgets/empty_state.dart';
 
@@ -18,19 +17,24 @@ class GraphScreen extends StatefulWidget {
     required this.controller,
     required this.repository,
     required this.onManageAssets,
+    this.initialFocusId,
   });
 
   final VaultController controller;
-  final MemoryAssetRepository repository;
+  final AssetRepository repository;
   final VoidCallback onManageAssets;
+  final String? initialFocusId;
 
   @override
   State<GraphScreen> createState() => _GraphScreenState();
 }
 
 class _GraphScreenState extends State<GraphScreen> {
-  List<Asset> _assets = [];
-  List<Relation> _relations = [];
+  final TextEditingController _searchController = TextEditingController();
+  List<Asset> _assets = const [];
+  List<Relation> _relations = const [];
+  Set<AssetType> _selectedTypes = const {};
+  Set<RelationType> _selectedRelationTypes = const {};
   bool _loading = true;
   String? _error;
 
@@ -38,6 +42,12 @@ class _GraphScreenState extends State<GraphScreen> {
   void initState() {
     super.initState();
     _reload();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _reload() async {
@@ -53,6 +63,12 @@ class _GraphScreenState extends State<GraphScreen> {
         _loading = false;
         _error = null;
       });
+      final focusedAssets = assets.where(
+        (asset) => asset.id == widget.initialFocusId,
+      );
+      if (focusedAssets.isNotEmpty) {
+        _searchController.text = focusedAssets.first.title;
+      }
     } on Exception {
       if (!mounted) {
         return;
@@ -64,116 +80,249 @@ class _GraphScreenState extends State<GraphScreen> {
     }
   }
 
+  int _relationCountOf(String assetId) => _relations
+      .where(
+        (relation) =>
+            relation.fromAssetId == assetId || relation.toAssetId == assetId,
+      )
+      .length;
+
+  bool _matches(Asset asset, String query) {
+    final keyword = query.trim().toLowerCase();
+    if (keyword.isEmpty) {
+      return true;
+    }
+    final text = [
+      asset.title,
+      asset.type.label,
+      ...asset.tags,
+      ...asset.fields.values.map((value) => value.toString()),
+    ].join('\n').toLowerCase();
+    return keyword.split(RegExp(r'\s+')).every(text.contains);
+  }
+
+  _GraphSelection get _selection {
+    final query = _searchController.text;
+    var nodes = _assets
+        .where(
+          _selectedTypes.isEmpty
+              ? (_) => true
+              : (asset) => _selectedTypes.contains(asset.type),
+        )
+        .toList();
+    if (query.trim().isNotEmpty) {
+      final matchingIds = nodes
+          .where((asset) => _matches(asset, query))
+          .map((asset) => asset.id)
+          .toSet();
+      final neighborIds = <String>{...matchingIds};
+      for (final relation in _relations) {
+        if (matchingIds.contains(relation.fromAssetId)) {
+          neighborIds.add(relation.toAssetId);
+        }
+        if (matchingIds.contains(relation.toAssetId)) {
+          neighborIds.add(relation.fromAssetId);
+        }
+      }
+      nodes = nodes.where((asset) => neighborIds.contains(asset.id)).toList();
+    }
+    final nodeIds = nodes.map((asset) => asset.id).toSet();
+    final edges = _relations
+        .where(
+          (relation) =>
+              nodeIds.contains(relation.fromAssetId) &&
+              nodeIds.contains(relation.toAssetId) &&
+              (_selectedRelationTypes.isEmpty ||
+                  _selectedRelationTypes.contains(relation.type)),
+        )
+        .toList();
+    return _GraphSelection(nodes, edges);
+  }
+
+  int get _filterCount => [
+    _selectedTypes.isNotEmpty,
+    _selectedRelationTypes.isNotEmpty,
+  ].where((active) => active).length;
+
+  void _focusAsset(Asset asset) {
+    _searchController.text = asset.title;
+    setState(() {});
+  }
+
   void _openNode(Asset asset) {
+    final relationCount = _relationCountOf(asset.id);
+    final metaText =
+        '${asset.type.label} · $relationCount 关联${asset.tags.isEmpty ? '' : ' · ${asset.tags.take(2).join('/')}'}';
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.nightSurface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  AssetTypeBadge(type: asset.type, size: 44),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          asset.title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        Text(
-                          asset.type.label,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: AppColors.nightTextSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(this.context).push(
-                      MaterialPageRoute(
-                        builder: (_) => AssetDetailScreen(
-                          controller: widget.controller,
-                          repository: widget.repository,
-                          assetId: asset.id,
-                        ),
+      builder: (sheetContext) => Theme(
+        data: AppTheme.night(),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    AssetTypeBadge(type: asset.type, size: 44),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            asset.title,
+                            style: Theme.of(sheetContext).textTheme.titleLarge,
+                          ),
+                          Text(
+                            metaText,
+                            style: Theme.of(sheetContext).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.nightTextSecondary),
+                          ),
+                        ],
                       ),
-                    );
-                  },
-                  child: const Text('查看'),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.nightTextPrimary,
+                          side: BorderSide(
+                            color: AppColors.nightTextPrimary.withValues(
+                              alpha: .38,
+                            ),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                          _focusAsset(asset);
+                        },
+                        child: const Text('聚焦一跳'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.nightTextPrimary,
+                          foregroundColor: AppColors.nightBackground,
+                        ),
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => AssetDetailScreen(
+                                controller: widget.controller,
+                                repository: widget.repository,
+                                assetId: asset.id,
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text('查看详情'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  Future<void> _openFilterSheet() async {
+    final result = await showModalBottomSheet<_GraphFilterDraft>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: AppColors.nightSurface,
+      builder: (sheetContext) => Theme(
+        data: AppTheme.night(),
+        child: _GraphFilterSheet(
+          selectedTypes: _selectedTypes,
+          selectedRelationTypes: _selectedRelationTypes,
+          assets: _assets,
+          relations: _relations,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _selectedTypes = result.types;
+        _selectedRelationTypes = result.relationTypes;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Theme(
-        data: AppTheme.night(),
-        child: Scaffold(
-          body: Container(
-            decoration: const BoxDecoration(gradient: AppGradients.nebula),
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Text(
-                      '资产图谱',
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                  ),
-                  Expanded(
-                    child: _buildBody(),
-                  ),
-                ],
+    data: AppTheme.night(),
+    child: Scaffold(
+      body: Container(
+        color: AppColors.nightBackground,
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _GraphSearchHeader(
+                controller: _searchController,
+                filterCount: _filterCount,
+                nodeCount: _selection.nodes.length,
+                relationCount: _selection.edges.length,
+                onChanged: () => setState(() {}),
+                onOpenFilter: _openFilterSheet,
+                onClear: () {
+                  _searchController.clear();
+                  setState(() {
+                    _selectedTypes = const {};
+                    _selectedRelationTypes = const {};
+                  });
+                },
               ),
-            ),
+              Expanded(child: _buildBody()),
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
     }
     if (_error != null) {
       return EmptyState(
         icon: Icons.cloud_off_outlined,
         title: _error!,
         actionLabel: '重试',
-        onAction: _reload,
+        onAction: () {
+          setState(() => _loading = true);
+          _reload();
+        },
         dark: true,
       );
     }
     if (_assets.isEmpty) {
       return EmptyState(
         icon: Icons.hub_outlined,
-        title: '先添加资产，星图会在这里点亮',
-        actionLabel: '新增资产',
+        title: '还没有资产',
+        actionLabel: '去新增',
         onAction: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => AssetEditScreen(
@@ -185,153 +334,295 @@ class _GraphScreenState extends State<GraphScreen> {
         dark: true,
       );
     }
-    if (_relations.isEmpty) {
+
+    final selection = _selection;
+    if (selection.nodes.isEmpty) {
       return EmptyState(
-        icon: Icons.link_outlined,
-        title: '资产之间还没有关联',
-        actionLabel: '去资产页添加关联',
-        onAction: widget.onManageAssets,
+        icon: Icons.search_off,
+        title: '没有匹配的节点',
+        actionLabel: '清除条件',
+        onAction: () {
+          _searchController.clear();
+          setState(() {
+            _selectedTypes = const {};
+            _selectedRelationTypes = const {};
+          });
+        },
         dark: true,
       );
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = Size(
-          constraints.maxWidth,
-          constraints.maxHeight,
-        );
-        final center = Offset(size.width / 2, size.height / 2);
-        final radius = math.min(size.width, size.height) / 2 - 76;
-        final positions = <String, Offset>{};
-        for (var index = 0; index < _assets.length; index++) {
-          final angle =
-              (math.pi * 2 * index / _assets.length) - math.pi / 2;
-          positions[_assets[index].id] = Offset(
-            center.dx + radius * math.cos(angle),
-            center.dy + radius * math.sin(angle),
-          );
-        }
-        return InteractiveViewer(
-          maxScale: 2.4,
-          minScale: .65,
-          child: SizedBox(
-            width: size.width,
-            height: size.height,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                CustomPaint(
-                  size: size,
-                  painter: _NebulaGraphPainter(
-                    relations: _relations,
-                    positions: positions,
-                  ),
-                ),
-                for (final asset in _assets)
-                  _GraphNode(
-                    asset: asset,
-                    position: positions[asset.id] ?? center,
-                    onTap: () => _openNode(asset),
-                  ),
-              ],
+    return Stack(
+      children: [
+        buildGraphView(
+          assets: selection.nodes,
+          relations: selection.edges,
+          onOpenNode: _openNode,
+        ),
+        if (selection.edges.isEmpty)
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: AppColors.nightSurface.withValues(alpha: .86),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '当前筛选没有关系；清空关系类型可查看全部资产网络。',
+                style: TextStyle(color: AppColors.nightTextSecondary),
+              ),
             ),
           ),
-        );
-      },
+      ],
     );
   }
 }
 
-class _GraphNode extends StatelessWidget {
-  const _GraphNode({
-    required this.asset,
-    required this.position,
-    required this.onTap,
+class _GraphSelection {
+  const _GraphSelection(this.nodes, this.edges);
+
+  final List<Asset> nodes;
+  final List<Relation> edges;
+}
+
+class _GraphFilterDraft {
+  const _GraphFilterDraft(this.types, this.relationTypes);
+
+  final Set<AssetType> types;
+  final Set<RelationType> relationTypes;
+}
+
+class _GraphSearchHeader extends StatelessWidget {
+  const _GraphSearchHeader({
+    required this.controller,
+    required this.filterCount,
+    required this.nodeCount,
+    required this.relationCount,
+    required this.onChanged,
+    required this.onOpenFilter,
+    required this.onClear,
   });
 
-  final Asset asset;
-  final Offset position;
-  final VoidCallback onTap;
+  final TextEditingController controller;
+  final int filterCount;
+  final int nodeCount;
+  final int relationCount;
+  final VoidCallback onChanged;
+  final VoidCallback onOpenFilter;
+  final VoidCallback onClear;
 
   @override
-  Widget build(BuildContext context) => Positioned(
-        left: position.dx - 34,
-        top: position.dy - 37,
-        width: 68,
-        height: 78,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      child: Column(
+        children: [
+          Row(
             children: [
-              AssetTypeBadge(type: asset.type, size: 28),
-              const SizedBox(height: 5),
-              Text(
-                asset.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.graphNode,
-                  fontSize: 11,
-                  height: 1.2,
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  onChanged: (_) => onChanged(),
+                  style: const TextStyle(color: AppColors.nightTextPrimary),
+                  decoration: InputDecoration(
+                    hintText: '搜索节点，自动保留一跳邻域',
+                    hintStyle: const TextStyle(
+                      color: AppColors.nightTextSecondary,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: AppColors.nightTextSecondary,
+                    ),
+                    suffixIcon: controller.text.isEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close),
+                            color: AppColors.nightTextSecondary,
+                            onPressed: onClear,
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.close),
+                            color: AppColors.nightTextSecondary,
+                            onPressed: () {
+                              controller.clear();
+                              onChanged();
+                            },
+                          ),
+                    filled: true,
+                    fillColor: AppColors.nightSurface.withValues(alpha: .78),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: onOpenFilter,
+                icon: const Icon(Icons.tune),
+                label: Text(filterCount == 0 ? '筛选' : '$filterCount'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.nightSurface.withValues(
+                    alpha: .86,
+                  ),
+                  foregroundColor: AppColors.nightTextPrimary,
+                  side: BorderSide(
+                    color: AppColors.nightTextPrimary.withValues(alpha: .16),
+                  ),
+                  minimumSize: const Size(52, 48),
                 ),
               ),
             ],
           ),
-        ),
-      );
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$nodeCount 个节点 · $relationCount 条关系',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AppColors.nightTextSecondary),
+                ),
+              ),
+              TextButton(onPressed: onClear, child: const Text('清空')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _NebulaGraphPainter extends CustomPainter {
-  const _NebulaGraphPainter({
+class _GraphFilterSheet extends StatefulWidget {
+  const _GraphFilterSheet({
+    required this.selectedTypes,
+    required this.selectedRelationTypes,
+    required this.assets,
     required this.relations,
-    required this.positions,
   });
 
+  final Set<AssetType> selectedTypes;
+  final Set<RelationType> selectedRelationTypes;
+  final List<Asset> assets;
   final List<Relation> relations;
-  final Map<String, Offset> positions;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final starPaint = Paint()..color = Colors.white.withValues(alpha: .08);
-    final random = math.Random(7);
-    for (var index = 0; index < 48; index++) {
-      canvas.drawCircle(
-        Offset(
-          random.nextDouble() * size.width,
-          random.nextDouble() * size.height,
-        ),
-        random.nextDouble() * 1.4 + .4,
-        starPaint,
-      );
-    }
+  State<_GraphFilterSheet> createState() => _GraphFilterSheetState();
+}
 
-    final edgePaint = Paint()
-      ..color = Colors.white.withValues(alpha: .28)
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.round;
-    for (final relation in relations) {
-      final from = positions[relation.fromAssetId];
-      final to = positions[relation.toAssetId];
-      if (from == null || to == null) {
-        continue;
-      }
-      canvas.drawLine(from, to, edgePaint);
-      final direction = (to - from) / (to - from).distance;
-      final arrowBase = to - direction * 30;
-      final normal = Offset(-direction.dy, direction.dx) * 5;
-      final arrowPaint = Paint()
-        ..color = Colors.white.withValues(alpha: .52)
-        ..strokeWidth = 1.4
-        ..strokeCap = StrokeCap.round;
-      canvas.drawLine(arrowBase, to - direction * 20, arrowPaint);
-      canvas.drawLine(arrowBase + normal, to - direction * 20, arrowPaint);
-      canvas.drawLine(arrowBase - normal, to - direction * 20, arrowPaint);
-    }
+class _GraphFilterSheetState extends State<_GraphFilterSheet> {
+  late Set<AssetType> _types;
+  late Set<RelationType> _relationTypes;
+
+  @override
+  void initState() {
+    super.initState();
+    _types = {...widget.selectedTypes};
+    _relationTypes = {...widget.selectedRelationTypes};
   }
 
+  int _assetCount(AssetType type) =>
+      widget.assets.where((asset) => asset.type == type).length;
+
+  int _relationCount(RelationType type) =>
+      widget.relations.where((relation) => relation.type == type).length;
+
   @override
-  bool shouldRepaint(covariant _NebulaGraphPainter oldDelegate) =>
-      oldDelegate.relations != relations || oldDelegate.positions != positions;
+  Widget build(BuildContext context) => SizedBox(
+    height: MediaQuery.sizeOf(context).height * .78,
+    child: SafeArea(
+      top: false,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '图谱筛选',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      Navigator.of(context)
+                          .pop(const _GraphFilterDraft({}, {})),
+                  child: const Text('重置'),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              children: [
+                const _GraphSheetTitle('资产类型'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final type in AssetType.values)
+                      FilterChip(
+                        label: Text('${type.label} · ${_assetCount(type)}'),
+                        selected: _types.contains(type),
+                        onSelected: (_) => setState(
+                          () => _types.contains(type)
+                              ? _types.remove(type)
+                              : _types.add(type),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const _GraphSheetTitle('关系类型'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final type in RelationType.values)
+                      FilterChip(
+                        label: Text('${type.label} · ${_relationCount(type)}'),
+                        selected: _relationTypes.contains(type),
+                        onSelected: (_) => setState(
+                          () => _relationTypes.contains(type)
+                              ? _relationTypes.remove(type)
+                              : _relationTypes.add(type),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () =>
+                    Navigator.of(context)
+                        .pop(_GraphFilterDraft(_types, _relationTypes)),
+                child: const Text('应用筛选'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _GraphSheetTitle extends StatelessWidget {
+  const _GraphSheetTitle(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Text(
+      title,
+      style: Theme.of(context).textTheme.titleMedium
+          ?.copyWith(fontWeight: FontWeight.w600),
+    ),
+  );
 }

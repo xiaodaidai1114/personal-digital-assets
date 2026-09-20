@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/asset.dart';
 import '../../theme/app_theme.dart';
 
 class EmptyState extends StatelessWidget {
@@ -21,43 +20,37 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: dark
-                        ? [
-                            AppColors.typeLight(AssetType.subscription),
-                            AppColors.typeLight(AssetType.email),
-                          ]
-                        : [
-                            AppColors.typeDeep(AssetType.subscription),
-                            AppColors.typeDeep(AssetType.email),
-                          ],
-                  ),
-                ),
-                child: Icon(icon, color: Colors.white, size: 36),
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: dark ? AppColors.nightTextPrimary : AppColors.ink,
+                width: 1.5,
               ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: onAction,
-                child: Text(actionLabel),
-              ),
-            ],
+            ),
+            child: Icon(
+              icon,
+              color: dark ? AppColors.nightTextPrimary : AppColors.ink,
+              size: 24,
+            ),
           ),
-        ),
-      );
+          const SizedBox(height: 16),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          FilledButton(onPressed: onAction, child: Text(actionLabel)),
+        ],
+      ),
+    ),
+  );
 }

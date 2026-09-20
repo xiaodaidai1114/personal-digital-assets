@@ -12,6 +12,7 @@ void main() {
       fields: {'prefix': 'sk-FAKE'},
       tags: ['演示', 'AI'],
       encryptedSecret: '{"version":1}',
+      isPinned: true,
       createdAt: createdAt,
       updatedAt: createdAt,
     );
@@ -22,6 +23,7 @@ void main() {
     expect(restored.fields, asset.fields);
     expect(restored.tags, asset.tags);
     expect(restored.encryptedSecret, asset.encryptedSecret);
+    expect(restored.isPinned, isTrue);
     expect(restored.createdAt, createdAt);
     expect(restored.updatedAt, createdAt);
   });
