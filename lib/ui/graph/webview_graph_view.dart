@@ -62,6 +62,11 @@ class _WebViewGraphViewState extends State<WebViewGraphView> {
         ),
       )
       ..loadFlutterAsset('assets/graph/g6.html');
+    // 夜墨画布不会被系统深色模式加暗，无需在此处理：
+    // 算法加暗需要 App 显式开启（本应用与 webview_flutter_android 4.14.1
+    // 均未开启）；旧版 force-dark 仅在原生主题为深色时触发，而本应用
+    // values-night 也钉死为 Theme.Light（见 android res/styles）。白色
+    // 背景仅设为透明，画布颜色完全由 Flutter 夜墨底与 G6 自绘。
   }
 
   @override

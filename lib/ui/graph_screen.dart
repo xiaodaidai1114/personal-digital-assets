@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/asset_repository.dart';
 import '../domain/asset.dart';
@@ -16,14 +17,12 @@ class GraphScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.repository,
-    required this.onManageAssets,
     this.initialFocusId,
     this.showBack = false,
   });
 
   final VaultController controller;
   final AssetRepository repository;
-  final VoidCallback onManageAssets;
   final String? initialFocusId;
   final bool showBack;
 
@@ -270,36 +269,46 @@ class _GraphScreenState extends State<GraphScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Theme(
-    data: AppTheme.night(),
-    child: Scaffold(
-      body: Container(
-        color: AppColors.nightBackground,
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _GraphSearchHeader(
-                onBack: widget.showBack
-                    ? () => Navigator.of(context).pop()
-                    : null,
-                controller: _searchController,
-                filterCount: _filterCount,
-                nodeCount: _selection.nodes.length,
-                relationCount: _selection.edges.length,
-                onChanged: () => setState(() {}),
-                onOpenFilter: _openFilterSheet,
-                onClear: () {
-                  _searchController.clear();
-                  setState(() {
-                    _selectedTypes = const {};
-                    _selectedRelationTypes = const {};
-                  });
-                },
-              ),
-              Expanded(child: _buildBody()),
-            ],
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+    // 星图整页夜墨（DESIGN.md）：系统状态栏/导航栏随之切夜色、启用浅色图标，
+    // 避免夜墨画布上顶着纸色系统栏与深色图标；离开星图后由 AppRoot 的
+    // 日间注解恢复纸底墨图标（更近的注解优先生效，此处在最上层）。
+    value: SystemUiOverlayStyle.light.copyWith(
+      statusBarColor: AppColors.nightBackground,
+      systemNavigationBarColor: AppColors.nightSurface,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+    child: Theme(
+      data: AppTheme.night(),
+      child: Scaffold(
+        body: Container(
+          color: AppColors.nightBackground,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _GraphSearchHeader(
+                  onBack: widget.showBack
+                      ? () => Navigator.of(context).pop()
+                      : null,
+                  controller: _searchController,
+                  filterCount: _filterCount,
+                  nodeCount: _selection.nodes.length,
+                  relationCount: _selection.edges.length,
+                  onChanged: () => setState(() {}),
+                  onOpenFilter: _openFilterSheet,
+                  onClear: () {
+                    _searchController.clear();
+                    setState(() {
+                      _selectedTypes = const {};
+                      _selectedRelationTypes = const {};
+                    });
+                  },
+                ),
+                Expanded(child: _buildBody()),
+              ],
+            ),
           ),
         ),
       ),

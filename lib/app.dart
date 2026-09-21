@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_services.dart';
@@ -19,7 +20,6 @@ import 'theme/app_theme.dart';
 import 'app_version.dart';
 import 'ui/asset_list_screen.dart';
 import 'ui/calendar_screen.dart';
-import 'ui/graph_screen.dart';
 import 'ui/settings_screen.dart';
 import 'ui/unlock_screen.dart';
 import 'vault/auto_lock.dart';
@@ -214,20 +214,30 @@ class _AppRootState extends State<AppRoot> {
   }
 
   @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      _controller.isUnlocked
-          ? MainShell(
-              services: widget.services,
-              autoLock: _autoLock,
-              onAppearanceChanged: widget.onAppearanceChanged,
-            )
-          : UnlockScreen(controller: _controller),
-      if (_openingCurtain)
-        _OpeningCurtain(
-          onFinished: () => setState(() => _openingCurtain = false),
-        ),
-    ],
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+    // 日间系统栏兜底（DESIGN.md 纸底墨图标）：解锁页等没有 AppBar 的纸面
+    // 也能确定图标方向，并保证离开星图夜色系统栏后恢复纸色；
+    // 星图页内部更近的 AnnotatedRegion 会覆盖本值。
+    value: SystemUiOverlayStyle.dark.copyWith(
+      statusBarColor: AppColors.paper,
+      systemNavigationBarColor: AppColors.paper,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+    child: Stack(
+      children: [
+        _controller.isUnlocked
+            ? MainShell(
+                services: widget.services,
+                autoLock: _autoLock,
+                onAppearanceChanged: widget.onAppearanceChanged,
+              )
+            : UnlockScreen(controller: _controller),
+        if (_openingCurtain)
+          _OpeningCurtain(
+            onFinished: () => setState(() => _openingCurtain = false),
+          ),
+      ],
+    ),
   );
 }
 
@@ -291,11 +301,11 @@ class _OpeningCurtainState extends State<_OpeningCurtain>
   }
 }
 
+// 星图不再是底栏 tab（日常使用频率低），入口移至详情页「打开星图」。
 const _desktopNavItems = <(int, String, IconData)>[
   (0, '找 · 保险库', Icons.inventory_2_outlined),
   (1, '办 · 哨所', Icons.visibility_outlined),
-  (2, '懂 · 星图', Icons.hub_outlined),
-  (3, '设置', Icons.settings_outlined),
+  (2, '设置', Icons.settings_outlined),
 ];
 
 class MainShell extends StatefulWidget {
@@ -339,19 +349,13 @@ class _MainShellState extends State<MainShell> {
         repository: services.repository,
         onDataChanged: services.syncReminders,
       ),
-      GraphScreen(
-        controller: services.controller,
-        repository: services.repository,
-        onManageAssets: () => setState(() => _selectedIndex = 0),
-      ),
       SettingsScreen(
         services: services,
         onAppearanceChanged: widget.onAppearanceChanged,
       ),
     ];
-    final graphSelected = _selectedIndex == 2;
     final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-    final updateBanner = !graphSelected && !_updateDismissed
+    final updateBanner = !_updateDismissed
         ? FutureBuilder<AppReleaseInfo?>(
             future: _updateFuture,
             builder: (context, snapshot) {
@@ -375,16 +379,10 @@ class _MainShellState extends State<MainShell> {
                 children: [
                   _DesktopNavigation(
                     selectedIndex: _selectedIndex,
-                    graphSelected: graphSelected,
                     onSelected: (index) =>
                         setState(() => _selectedIndex = index),
                   ),
-                  Container(
-                    height: 1,
-                    color: graphSelected
-                        ? AppColors.nightTextPrimary.withValues(alpha: .12)
-                        : AppColors.rule,
-                  ),
+                  Container(height: 1, color: AppColors.rule),
                   Expanded(
                     child: Column(
                       children: [
@@ -425,44 +423,32 @@ class _MainShellState extends State<MainShell> {
               ),
         bottomNavigationBar: isDesktop
             ? null
-            : Theme(
-                data: graphSelected ? AppTheme.night() : AppTheme.day(),
-                child: NavigationBar(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: (index) =>
-                      setState(() => _selectedIndex = index),
-                  backgroundColor: graphSelected
-                      ? AppColors.nightSurface
-                      : AppColors.sheet,
-                  indicatorColor: graphSelected
-                      ? AppColors.nightTextPrimary.withValues(alpha: .12)
-                      : AppColors.paper2,
-                  surfaceTintColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  elevation: 0,
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.inventory_2_outlined),
-                      selectedIcon: Icon(Icons.inventory_2_outlined),
-                      label: '保险库',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.visibility_outlined),
-                      selectedIcon: Icon(Icons.visibility_outlined),
-                      label: '哨所',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.hub_outlined),
-                      selectedIcon: Icon(Icons.hub_outlined),
-                      label: '星图',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.settings_outlined),
-                      selectedIcon: Icon(Icons.settings),
-                      label: '设置',
-                    ),
-                  ],
-                ),
+            : NavigationBar(
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: (index) =>
+                    setState(() => _selectedIndex = index),
+                backgroundColor: AppColors.sheet,
+                indicatorColor: AppColors.paper2,
+                surfaceTintColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                elevation: 0,
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.inventory_2_outlined),
+                    selectedIcon: Icon(Icons.inventory_2_outlined),
+                    label: '保险库',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.visibility_outlined),
+                    selectedIcon: Icon(Icons.visibility_outlined),
+                    label: '哨所',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    selectedIcon: Icon(Icons.settings),
+                    label: '设置',
+                  ),
+                ],
               ),
       ),
     );
@@ -545,24 +531,18 @@ class _UpdateBanner extends StatelessWidget {
 class _DesktopNavigation extends StatelessWidget {
   const _DesktopNavigation({
     required this.selectedIndex,
-    required this.graphSelected,
     required this.onSelected,
   });
 
   final int selectedIndex;
-  final bool graphSelected;
   final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    final foreground = graphSelected
-        ? AppColors.nightTextPrimary
-        : AppColors.ink;
-    final secondary = graphSelected
-        ? AppColors.nightTextSecondary
-        : AppColors.ink2;
+    const foreground = AppColors.ink;
+    const secondary = AppColors.ink2;
     return Material(
-      color: graphSelected ? AppColors.nightSurface : AppColors.sheet,
+      color: AppColors.sheet,
       child: SafeArea(
         bottom: false,
         child: Container(
@@ -592,9 +572,7 @@ class _DesktopNavigation extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
                         color: selectedIndex == item.$1
-                            ? (graphSelected
-                                  ? foreground.withValues(alpha: .12)
-                                  : AppColors.paper2)
+                            ? AppColors.paper2
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                       ),

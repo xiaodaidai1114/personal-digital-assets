@@ -127,7 +127,6 @@ class _AssetListScreenState extends State<AssetListScreen> {
         builder: (_) => GraphScreen(
           controller: widget.controller,
           repository: widget.repository,
-          onManageAssets: () => Navigator.of(context).pop(),
           initialFocusId: focusAssetId,
           showBack: true,
         ),
