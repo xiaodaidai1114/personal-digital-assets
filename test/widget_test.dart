@@ -9,6 +9,7 @@ import 'package:personal_digital_assets/data/memory_asset_repository.dart';
 import 'package:personal_digital_assets/theme/app_theme.dart';
 import 'package:personal_digital_assets/ui/asset_detail_screen.dart';
 import 'package:personal_digital_assets/ui/calendar_screen.dart';
+import 'package:personal_digital_assets/ui/palette/command_palette.dart';
 import 'package:personal_digital_assets/vault/vault_controller.dart';
 
 Future<void> unlockApp(
@@ -49,9 +50,11 @@ void main() {
     expect(find.text('创建主密码'), findsOneWidget);
 
     // 无 AppBar 的纸面走 AppRoot 日间注解：纸底墨图标
-    final overlay = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
-      find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
-    ).value;
+    final overlay = tester
+        .widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+          find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
+        )
+        .value;
     expect(overlay.statusBarIconBrightness, Brightness.dark);
     expect(overlay.statusBarColor, AppSkin.light.canvas);
     expect(overlay.systemNavigationBarColor, AppSkin.light.canvas);
@@ -63,40 +66,68 @@ void main() {
     expect(find.text('AI 助手订阅'), findsWidgets);
   });
 
-  testWidgets('资产页可筛选类型', (tester) async {
+  testWidgets('命令面板按类型检索并直达详情', (tester) async {
     await unlockApp(tester);
-    await tester.tap(find.text('筛选'));
+    await tester.tap(find.text('检索资产、字段、标签…'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('邮箱 ·').last);
+    await tester.enterText(find.widgetWithText(TextField, '检索资产、字段、标签…'), '邮箱');
     await tester.pump();
-    await tester.tap(find.text('应用筛选'));
-    await tester.pumpAndSettle();
-    expect(find.text('主邮箱'), findsWidgets);
-    // 首页哨兵的临期提醒不受筛选影响（订阅临期仍提醒），
-    // 但资产列表本身应只剩邮箱类资产
-    final assetList = find.byType(ListView).first;
+    final palette = find.byType(CommandPalette);
+    // 「邮箱」同时命中标题与邮箱类型标签，非邮箱资产被面板排除
     expect(
-      find.descendant(of: assetList, matching: find.text('AI 助手订阅')),
+      find.descendant(of: palette, matching: find.text('主邮箱')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: palette, matching: find.text('AI 助手订阅')),
       findsNothing,
     );
+    await tester.tap(find.descendant(of: palette, matching: find.text('主邮箱')));
+    await tester.pumpAndSettle();
+    // 选中直达详情
+    expect(find.byType(AssetDetailScreen), findsOneWidget);
   });
 
-  testWidgets('资产页支持搜索与删除已选条件', (tester) async {
+  testWidgets('命令面板支持字段检索、清空恢复与空态', (tester) async {
     await unlockApp(tester);
-    await tester.enterText(
-      find.widgetWithText(TextField, '搜索标题、标签、字段、关联'),
-      'Android',
+    await tester.tap(find.text('检索资产、字段、标签…'));
+    await tester.pumpAndSettle();
+    final palette = find.byType(CommandPalette);
+    // 字段值命中：标题不含 Android，靠 os 字段检索（暗数据不出暗区）
+    await tester.enterText(find.byType(TextField), 'Android');
+    await tester.pump();
+    expect(
+      find.descendant(of: palette, matching: find.text('安卓手机')),
+      findsOneWidget,
     );
+    expect(
+      find.descendant(of: palette, matching: find.text('主邮箱')),
+      findsNothing,
+    );
+    // 清空恢复全量
+    await tester.enterText(find.byType(TextField), '');
     await tester.pump();
-    expect(find.text('AI 助手 API Key'), findsNothing);
-    await tester.tap(find.byTooltip('删除搜索条件'));
+    expect(
+      find.descendant(of: palette, matching: find.text('主邮箱')),
+      findsOneWidget,
+    );
+    // 无匹配显示空态并可关闭
+    await tester.enterText(find.byType(TextField), 'zzz不存在');
     await tester.pump();
-    expect(find.text('AI 助手订阅'), findsWidgets);
+    expect(
+      find.descendant(of: palette, matching: find.text('无匹配资产')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('关闭面板'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CommandPalette), findsNothing);
   });
 
   testWidgets('到期清单独立页显示提醒区与月视图', (tester) async {
     // 哨所已转为后台提醒，到期清单页独立存在（入口藏于设置）
-    final controller = VaultController(deriver: Pbkdf2Deriver(iterations: 1000));
+    final controller = VaultController(
+      deriver: Pbkdf2Deriver(iterations: 1000),
+    );
     final repository = MemoryAssetRepository();
     await seedDemoData(repository);
     await tester.pumpWidget(
@@ -262,12 +293,20 @@ void main() {
     await tester.tap(find.text('添加标签'));
     await tester.pumpAndSettle();
     expect(find.text('已选 1 项'), findsNothing);
-    await tester.enterText(
-      find.widgetWithText(TextField, '搜索标题、标签、字段、关联'),
-      '批量处理',
-    );
+    // 打上标签后，命令面板可按新标签检索到该资产
+    await tester.tap(find.text('检索资产、字段、标签…'));
+    await tester.pumpAndSettle();
+    final palette = find.byType(CommandPalette);
+    await tester.enterText(find.byType(TextField), '批量处理');
     await tester.pump();
-    expect(find.textContaining('当前 1 项'), findsOneWidget);
+    expect(
+      find.descendant(of: palette, matching: find.text('AI 助手 API Key')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: palette, matching: find.text('主邮箱')),
+      findsNothing,
+    );
   });
 
   testWidgets('设置页显示安全与数据功能项', (tester) async {
