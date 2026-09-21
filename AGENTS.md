@@ -43,8 +43,8 @@ UI 设计方向已定为「纸墨加密账册」，唯一视觉依据是 `docs/d
 - Flutter 不在 PATH，完整路径：`C:\dev\flutter\bin\flutter.bat`（3.47.5 stable，2026-09-21 zip 安装）。`C:\dev\pda` 是指向仓库的 junction，gradle/analyze 等命令一律从该路径运行，避开中文路径。
 - 每次 pub 相关命令前设置国内镜像：`$env:PUB_HOSTED_URL='https://pub.flutter-io.cn'; $env:FLUTTER_STORAGE_BASE_URL='https://storage.flutter-io.cn'`（已写入用户环境变量）。
 - 仓库路径含中文会导致 `flutter analyze` 崩溃（analysis_server LSP bug），验证用 `dart analyze` + `flutter test`。
-- JDK 17 与 Android SDK（原 `C:\dev\android-sdk`、Eclipse Adoptium）尚未重装，打 APK 前需先安装并按本节原配置恢复。
+- JDK 17（Temurin `C:\dev\jdk-17.0.20.1+1`）与 Android SDK（`C:\dev\android-sdk`：platform-tools、platforms;android-36、build-tools;36.0.0，licenses 已接受）已于 2026-09-21 重装。gradle 需 `JAVA_HOME` 指向该 JDK，flutter CLI 需 `ANDROID_HOME=C:\dev\android-sdk`（已用 `flutter config --android-sdk` 持久化）。
 - 打 APK：在 `C:\dev\pda` 运行 `flutter build apk --release`，产物在 `build\app\outputs\flutter-apk\app-release.apk`。
-- Gradle 发行包走腾讯镜像（`android/gradle/wrapper/gradle-wrapper.properties` 已配置），官方源在本机直连会卡死。
+- Gradle 发行包走腾讯镜像（`android/gradle/wrapper/gradle-wrapper.properties` 已配置）；maven 依赖走阿里云镜像（`android/settings.gradle.kts`、`android/build.gradle.kts` 已配置，另 `C:\Users\admin\.gradle\init.d\cn-mirrors.init.gradle.kts` 为 flutter SDK 自带构建注入镜像），官方源在本机直连会卡死。
 - 验证：`flutter analyze` + `flutter test`。
 - 本机 git 对 github.com 配置了失效代理（socks5://127.0.0.1:1081），推送时需加参数绕过：`git -c http.https://github.com.proxy= push`。
