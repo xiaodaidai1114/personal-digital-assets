@@ -58,6 +58,9 @@ dependencies:
   share_plus: ^11.1.0
   # 备份文件选择导入
   file_picker: ^10.1.2
+  # 资产图片附件：系统相册选择并原生压缩（maxWidth/imageQuality），
+  # 免引入独立压缩依赖；现有 file_picker 无相册压缩与相机能力
+  image_picker: ^1.1.2
   # 应用设置（自动锁定时长等）
   shared_preferences: ^2.5.3
   # 日历日期格式化

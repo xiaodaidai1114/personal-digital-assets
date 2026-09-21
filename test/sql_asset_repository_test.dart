@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_digital_assets/data/sql/sql_asset_repository.dart';
 import 'package:personal_digital_assets/domain/asset.dart';
+import 'package:personal_digital_assets/domain/asset_attachment.dart';
+import 'package:personal_digital_assets/domain/asset_note.dart';
 import 'package:personal_digital_assets/domain/relation.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -200,5 +203,156 @@ CREATE TABLE relations(
       predicate((Asset? updated) => updated?.isPinned == true),
     );
     await repository.close();
+  });
+
+  test('备注按时间倒序与删除', () async {
+    final repository = SqlAssetRepository(
+      factory: databaseFactoryFfi,
+      path: dbPath,
+    );
+    await repository.saveAsset(
+      Asset(id: 'a', type: AssetType.email, title: '邮箱'),
+    );
+    await repository.addNote(
+      AssetNote(
+        id: 'n1',
+        assetId: 'a',
+        content: '第一条',
+        createdAt: DateTime.utc(2026, 9, 20, 8, 0, 0),
+      ),
+    );
+    await repository.addNote(
+      AssetNote(
+        id: 'n2',
+        assetId: 'a',
+        content: '第二条',
+        createdAt: DateTime.utc(2026, 9, 21, 8, 0, 0),
+      ),
+    );
+    final notes = await repository.listNotes('a');
+    expect(notes.map((note) => note.id), ['n2', 'n1']);
+    expect(notes.first.content, '第二条');
+
+    await repository.deleteNote('n2');
+    expect((await repository.listNotes('a')).map((note) => note.id), ['n1']);
+    await repository.close();
+  });
+
+  test('附件字节 BLOB 往返与删除', () async {
+    final repository = SqlAssetRepository(
+      factory: databaseFactoryFfi,
+      path: dbPath,
+    );
+    await repository.saveAsset(
+      Asset(id: 'a', type: AssetType.email, title: '邮箱'),
+    );
+    final bytes = Uint8List.fromList([1, 2, 3, 4, 5]);
+    await repository.addAttachment(
+      AssetAttachment(
+        id: 'att1',
+        assetId: 'a',
+        name: 'receipt.jpg',
+        mimeType: 'image/jpeg',
+        byteSize: bytes.length,
+      ),
+      bytes,
+    );
+    final attachments = await repository.listAttachments('a');
+    expect(attachments, hasLength(1));
+    expect(attachments.first.name, 'receipt.jpg');
+    expect(attachments.first.byteSize, bytes.length);
+    expect(await repository.attachmentBytes('att1'), bytes);
+
+    await repository.deleteAttachment('att1');
+    expect(await repository.listAttachments('a'), isEmpty);
+    expect(await repository.attachmentBytes('att1'), isNull);
+    await repository.close();
+  });
+
+  test('删除资产级联删除其备注与附件', () async {
+    final repository = SqlAssetRepository(
+      factory: databaseFactoryFfi,
+      path: dbPath,
+    );
+    await repository.saveAsset(
+      Asset(id: 'a', type: AssetType.email, title: '邮箱'),
+    );
+    await repository.addNote(AssetNote(id: 'n1', assetId: 'a', content: '备注'));
+    await repository.addAttachment(
+      AssetAttachment(id: 'att1', assetId: 'a', name: 'card.jpg'),
+      const [9, 9, 9],
+    );
+    await repository.deleteAsset('a');
+    expect(await repository.listNotes('a'), isEmpty);
+    expect(await repository.listAttachments('a'), isEmpty);
+    expect(await repository.attachmentBytes('att1'), isNull);
+    await repository.close();
+  });
+
+  test('v2 数据库升级 v3 时保留数据并建备注与附件表', () async {
+    final legacyDb = await databaseFactoryFfi.openDatabase(
+      dbPath,
+      options: OpenDatabaseOptions(
+        version: 2,
+        onCreate: (db, version) async {
+          await db.execute('''
+CREATE TABLE assets(
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  fields TEXT NOT NULL DEFAULT '{}',
+  tags TEXT NOT NULL DEFAULT '[]',
+  encrypted_secret TEXT,
+  is_pinned INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+''');
+          await db.execute('''
+CREATE TABLE relations(
+  id TEXT PRIMARY KEY,
+  from_asset_id TEXT NOT NULL,
+  to_asset_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  note TEXT,
+  created_at TEXT NOT NULL
+)
+''');
+        },
+      ),
+    );
+    await legacyDb.insert('assets', {
+      'id': 'legacy',
+      'type': 'email',
+      'title': '旧版本邮箱',
+      'fields': '{"address":"user@example.com"}',
+      'tags': '[]',
+      'created_at': '2026-09-01T08:00:00.000Z',
+      'updated_at': '2026-09-02T08:00:00.000Z',
+    });
+    await legacyDb.close();
+
+    final repository = SqlAssetRepository(
+      factory: databaseFactoryFfi,
+      path: dbPath,
+    );
+    expect((await repository.getAsset('legacy'))?.title, '旧版本邮箱');
+
+    await repository.addNote(
+      AssetNote(id: 'n1', assetId: 'legacy', content: '迁移后新增'),
+    );
+    await repository.addAttachment(
+      AssetAttachment(id: 'att1', assetId: 'legacy', name: 'photo.jpg'),
+      const [7, 7],
+    );
+    await repository.close();
+
+    final reopened = SqlAssetRepository(
+      factory: databaseFactoryFfi,
+      path: dbPath,
+    );
+    expect((await reopened.listNotes('legacy')).single.content, '迁移后新增');
+    expect(await reopened.attachmentBytes('att1'), const [7, 7]);
+    await reopened.close();
   });
 }

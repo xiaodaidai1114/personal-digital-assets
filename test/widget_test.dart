@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_digital_assets/app.dart';
 import 'package:personal_digital_assets/crypto/kdf.dart';
@@ -6,6 +7,7 @@ import 'package:personal_digital_assets/data/app_update.dart';
 import 'package:personal_digital_assets/theme/app_theme.dart';
 import 'package:personal_digital_assets/ui/asset_detail_screen.dart';
 import 'package:personal_digital_assets/ui/graph/native_graph_view.dart';
+import 'package:personal_digital_assets/ui/graph_screen.dart';
 import 'package:personal_digital_assets/vault/vault_controller.dart';
 
 Future<void> unlockApp(
@@ -44,6 +46,14 @@ void main() {
     await tester.pumpWidget(PersonalDigitalAssetsApp(controller: controller));
     await tester.pump();
     expect(find.text('创建主密码'), findsOneWidget);
+
+    // 无 AppBar 的纸面走 AppRoot 日间注解：纸底墨图标
+    final overlay = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+      find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
+    ).value;
+    expect(overlay.statusBarIconBrightness, Brightness.dark);
+    expect(overlay.statusBarColor, AppColors.paper);
+    expect(overlay.systemNavigationBarColor, AppColors.paper);
   });
 
   testWidgets('创建主密码后进入资产列表并显示演示数据', (tester) async {
@@ -61,7 +71,13 @@ void main() {
     await tester.tap(find.text('应用筛选'));
     await tester.pumpAndSettle();
     expect(find.text('主邮箱'), findsWidgets);
-    expect(find.text('AI 助手订阅'), findsNothing);
+    // 首页哨兵的临期提醒不受筛选影响（订阅临期仍提醒），
+    // 但资产列表本身应只剩邮箱类资产
+    final assetList = find.byType(ListView).first;
+    expect(
+      find.descendant(of: assetList, matching: find.text('AI 助手订阅')),
+      findsNothing,
+    );
   });
 
   testWidgets('资产页支持搜索与删除已选条件', (tester) async {
@@ -92,30 +108,66 @@ void main() {
     expect(find.text('10 月订阅账单'), findsWidgets);
   });
 
-  testWidgets('星图渲染节点（常驻动画，用定长 pump）', (tester) async {
+  testWidgets('星图渲染节点并把系统栏切夜色（常驻动画，用定长 pump）', (tester) async {
     await unlockApp(tester);
-    await tester.tap(find.text('星图'));
+
+    // 星图移出底栏后，导航栏恒为日间纸面（路由会遮蔽底栏，先在主壳断言）
+    final navigationBar = tester.widget<NavigationBar>(
+      find.byType(NavigationBar),
+    );
+    expect(navigationBar.backgroundColor, AppColors.sheet);
+
+    // 星图已移出底栏，入口在资产详情页「打开星图」
+    await tester.ensureVisible(find.text('主邮箱').last);
+    await tester.tap(find.text('主邮箱').last);
+    await tester.pumpAndSettle();
+    // 局部图位于长列表深处，元素按视口物化，需滚动直到其出现
+    await tester.scrollUntilVisible(
+      find.text('打开星图'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.text('打开星图'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.textContaining('个节点 ·'), findsOneWidget);
     expect(find.text('清空'), findsOneWidget);
 
-    final navigationBar = tester.widget<NavigationBar>(
-      find.byType(NavigationBar),
-    );
-    expect(navigationBar.backgroundColor, AppColors.nightSurface);
+    // 星图夜墨画布：状态栏/导航栏同色，图标转浅色
+    final overlay = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+      find.descendant(
+        of: find.byType(GraphScreen),
+        matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+      ),
+    ).value;
+    expect(overlay.statusBarIconBrightness, Brightness.light);
+    expect(overlay.statusBarColor, AppColors.nightBackground);
+    expect(overlay.systemNavigationBarColor, AppColors.nightSurface);
   });
 
   testWidgets('星图搜索聚焦一跳时保留全部节点', (tester) async {
     await unlockApp(tester);
-    await tester.tap(find.text('星图'));
+    await tester.ensureVisible(find.text('主邮箱').last);
+    await tester.tap(find.text('主邮箱').last);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('打开星图'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.text('打开星图'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    final totalCount = tester
-        .widget<NativeGraphView>(find.byType(NativeGraphView))
-        .assets
-        .length;
+    // 详情页局部图也在树中，限定星图页内的图谱视图
+    final graphFinder = find.descendant(
+      of: find.byType(GraphScreen),
+      matching: find.byType(NativeGraphView),
+    );
+    final totalCount =
+        tester.widget<NativeGraphView>(graphFinder).assets.length;
 
     await tester.enterText(
       find.widgetWithText(TextField, '搜索节点，自动保留一跳邻域'),
@@ -123,7 +175,7 @@ void main() {
     );
     await tester.pump();
 
-    final graph = tester.widget<NativeGraphView>(find.byType(NativeGraphView));
+    final graph = tester.widget<NativeGraphView>(graphFinder);
     expect(graph.assets.length, totalCount);
     expect(graph.focusIds, isNotEmpty);
   });
@@ -145,6 +197,71 @@ void main() {
 
     expect(find.byType(AssetDetailScreen), findsOneWidget);
     expect(find.text('邮箱地址'), findsOneWidget);
+  });
+
+  testWidgets('详情页可添加与删除备注', (tester) async {
+    await unlockApp(tester);
+    await tester.ensureVisible(find.text('主邮箱').last);
+    await tester.tap(find.text('主邮箱').last);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('添加备注'));
+    await tester.pump();
+    await tester.tap(find.text('添加备注'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '已开启二次验证');
+    // ensureVisible 会把按钮顶到 AppBar 下缘，下拉露出来再点
+    await tester.ensureVisible(find.text('保存'));
+    await tester.pump();
+    await tester.drag(find.byType(ListView).first, const Offset(0, 160));
+    await tester.pump();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(find.text('已开启二次验证'), findsOneWidget);
+
+    // 新备注排在最前，删除第一条并确认
+    await tester.ensureVisible(find.byTooltip('删除备注').first);
+    await tester.pump();
+    await tester.tap(find.byTooltip('删除备注').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    expect(find.text('已开启二次验证'), findsNothing);
+  });
+
+  testWidgets('备注拒绝完整 Key 且不落库', (tester) async {
+    await unlockApp(tester);
+    await tester.ensureVisible(find.text('主邮箱').last);
+    await tester.tap(find.text('主邮箱').last);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('添加备注'));
+    await tester.pump();
+    await tester.tap(find.text('添加备注'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'sk-abcdef1234567890');
+    await tester.ensureVisible(find.text('保存'));
+    await tester.pump();
+    await tester.drag(find.byType(ListView).first, const Offset(0, 160));
+    await tester.pump();
+    await tester.tap(find.text('保存'));
+    await tester.pump();
+
+    expect(find.textContaining('完整 Key'), findsOneWidget);
+    // 保存失败时输入框保持展开（内容未写入时间线）
+    expect(find.text('保存'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+  });
+
+  testWidgets('详情页显示图片区与空态', (tester) async {
+    await unlockApp(tester);
+    await tester.ensureVisible(find.text('主邮箱').last);
+    await tester.tap(find.text('主邮箱').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('添加图片'));
+    await tester.pump();
+    expect(find.text('图片'), findsOneWidget);
+    expect(find.text('暂无图片'), findsOneWidget);
   });
 
   testWidgets('新增表单在普通字段中拒绝完整 Key', (tester) async {
@@ -173,7 +290,17 @@ void main() {
 
   testWidgets('图谱筛选抽屉保持夜墨文本', (tester) async {
     await unlockApp(tester);
-    await tester.tap(find.text('星图'));
+    await tester.ensureVisible(find.text('主邮箱').last);
+    await tester.tap(find.text('主邮箱').last);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('打开星图'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.text('打开星图'));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('筛选'));
     await tester.pump(const Duration(milliseconds: 300));

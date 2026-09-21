@@ -2,11 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/asset_repository.dart';
 import '../domain/asset.dart';
+import '../domain/asset_attachment.dart';
 import '../domain/asset_field_format.dart';
+import '../domain/asset_field_policy.dart';
+import '../domain/asset_note.dart';
 import '../domain/relation.dart';
 import '../theme/app_theme.dart';
 import '../vault/vault_controller.dart';
@@ -45,6 +50,8 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
   List<Asset> _allAssets = [];
   List<Relation> _relations = [];
   Map<String, Asset> _relatedAssets = {};
+  List<AssetNote> _notes = const [];
+  List<AssetAttachment> _attachments = const [];
   String? _revealedSecret;
   String? _secretError;
   bool _busy = false;
@@ -70,6 +77,12 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
       final relations = asset == null
           ? const <Relation>[]
           : await widget.repository.relationsOf(asset.id);
+      final notes = asset == null
+          ? const <AssetNote>[]
+          : await widget.repository.listNotes(asset.id);
+      final attachments = asset == null
+          ? const <AssetAttachment>[]
+          : await widget.repository.listAttachments(asset.id);
       final relatedAssets = <String, Asset>{};
       for (final relation in relations) {
         final otherId = relation.fromAssetId == asset?.id
@@ -89,6 +102,8 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
         _relations = relations;
         _relatedAssets = relatedAssets;
         _allAssets = allAssets;
+        _notes = notes;
+        _attachments = attachments;
         _loaded = true;
         _error = null;
       });
@@ -242,6 +257,111 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
     );
     if (confirmed == true) {
       await widget.repository.deleteRelation(relation.id);
+      await _reload();
+      widget.onDataChanged?.call();
+    }
+  }
+
+  /// 返回 null 表示保存成功，否则为给用户看的错误文案。
+  Future<String?> _addNote(String content) async {
+    final asset = _asset;
+    if (asset == null) {
+      return '资产不存在';
+    }
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) {
+      return '备注内容不能为空';
+    }
+    // 设计红线：敏感明文不落盘，保存前与资产表单同规校验
+    final error = AssetFieldPolicy.sensitivePlainTextError(trimmed);
+    if (error != null) {
+      return error;
+    }
+    await widget.repository.addNote(
+      AssetNote(id: const Uuid().v4(), assetId: asset.id, content: trimmed),
+    );
+    await _reload();
+    widget.onDataChanged?.call();
+    return null;
+  }
+
+  Future<void> _deleteNote(AssetNote note) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除备注'),
+        content: const Text('确定删除这条备注吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await widget.repository.deleteNote(note.id);
+      await _reload();
+      widget.onDataChanged?.call();
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final asset = _asset;
+    if (asset == null) {
+      return;
+    }
+    // 仅相册入口：Android 13+ 走系统 Photo Picker，无需任何权限声明；
+    // maxWidth/imageQuality 由原生侧压缩。web 预览不生效（预览数据即弃，可接受）。
+    final xfile = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      imageQuality: 85,
+    );
+    if (xfile == null) {
+      return; // 用户取消选择
+    }
+    final bytes = await xfile.readAsBytes();
+    await widget.repository.addAttachment(
+      AssetAttachment(
+        id: const Uuid().v4(),
+        assetId: asset.id,
+        name: xfile.name,
+        mimeType: xfile.mimeType,
+        byteSize: bytes.length,
+      ),
+      bytes,
+    );
+    await _reload();
+    widget.onDataChanged?.call();
+  }
+
+  Future<void> _deleteAttachment(AssetAttachment attachment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除图片'),
+        content: Text('确定删除「${attachment.name}」吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await widget.repository.deleteAttachment(attachment.id);
       await _reload();
       widget.onDataChanged?.call();
     }
@@ -440,6 +560,19 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
               ),
             ],
             const SizedBox(height: 20),
+            _NotesCard(
+              notes: _notes,
+              onAddNote: _addNote,
+              onDeleteNote: _deleteNote,
+            ),
+            const SizedBox(height: 20),
+            _AttachmentsCard(
+              attachments: _attachments,
+              repository: widget.repository,
+              onAdd: _pickImage,
+              onDelete: _deleteAttachment,
+            ),
+            const SizedBox(height: 20),
             _LocalGraphCard(
               assets: [
                 asset,
@@ -620,6 +753,342 @@ class _SealedSecretCard extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 备注时间线卡：多条带时间戳的短记录，新条目在前（设计文档 §资产详情）。
+/// 内容为明文，仅存加密库；保存前经敏感明文校验（见 _AssetDetailScreenState._addNote）。
+class _NotesCard extends StatefulWidget {
+  const _NotesCard({
+    required this.notes,
+    required this.onAddNote,
+    required this.onDeleteNote,
+  });
+
+  final List<AssetNote> notes;
+  final Future<String?> Function(String content) onAddNote;
+  final void Function(AssetNote note) onDeleteNote;
+
+  @override
+  State<_NotesCard> createState() => _NotesCardState();
+}
+
+class _NotesCardState extends State<_NotesCard> {
+  final TextEditingController _controller = TextEditingController();
+  bool _composing = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final error = await widget.onAddNote(_controller.text);
+    if (!mounted) {
+      return;
+    }
+    if (error == null) {
+      _controller.clear();
+      setState(() {
+        _composing = false;
+        _error = null;
+      });
+    } else {
+      setState(() => _error = error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('备注', style: Theme.of(context).textTheme.titleLarge),
+            ),
+            TextButton.icon(
+              onPressed: _composing
+                  ? null
+                  : () => setState(() => _composing = true),
+              icon: const Icon(Icons.edit_note),
+              label: const Text('添加备注'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_composing)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _controller,
+                    maxLines: 3,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: '记录一笔动态',
+                      hintText: '例如：已开启二次验证',
+                      errorText: _error,
+                    ),
+                    onChanged: (_) {
+                      if (_error != null) {
+                        setState(() => _error = null);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _composing = false;
+                          _error = null;
+                        }),
+                        child: const Text('取消'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _save,
+                        child: const Text('保存'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (widget.notes.isEmpty && !_composing)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Icon(Icons.notes_outlined, size: 32),
+                  SizedBox(height: 8),
+                  Text('暂无备注'),
+                ],
+              ),
+            ),
+          )
+        else if (widget.notes.isNotEmpty)
+          Card(
+            child: Column(
+              children: [
+                for (final note in widget.notes) ...[
+                  ListTile(
+                    leading: Text(
+                      DateFormat('MM-dd HH:mm').format(note.createdAt),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.ink2,
+                      ),
+                    ),
+                    title: Text(note.content),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: '删除备注',
+                      onPressed: () => widget.onDeleteNote(note),
+                    ),
+                  ),
+                  if (note != widget.notes.last) const Divider(height: 1),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// 图片附件卡：96px 缩略方块，点开全屏查看，长按删除（设计文档 §资产详情）。
+/// 字节为密文 BLOB，按需读取；缩略用 Image.memory 的 cacheWidth 渲染时降采样。
+class _AttachmentsCard extends StatelessWidget {
+  const _AttachmentsCard({
+    required this.attachments,
+    required this.repository,
+    required this.onAdd,
+    required this.onDelete,
+  });
+
+  final List<AssetAttachment> attachments;
+  final AssetRepository repository;
+  final VoidCallback onAdd;
+  final void Function(AssetAttachment attachment) onDelete;
+
+  void _openViewer(BuildContext context, AssetAttachment attachment) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _AttachmentViewerScreen(
+          attachment: attachment,
+          repository: repository,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('图片', style: Theme.of(context).textTheme.titleLarge),
+            ),
+            TextButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_a_photo_outlined),
+              label: const Text('添加图片'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (attachments.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Icon(Icons.image_outlined, size: 32),
+                  SizedBox(height: 8),
+                  Text('暂无图片'),
+                ],
+              ),
+            ),
+          )
+        else
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final attachment in attachments)
+                    _AttachmentTile(
+                      attachment: attachment,
+                      repository: repository,
+                      onTap: () => _openViewer(context, attachment),
+                      onLongPress: () => onDelete(attachment),
+                    ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AttachmentTile extends StatefulWidget {
+  const _AttachmentTile({
+    required this.attachment,
+    required this.repository,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final AssetAttachment attachment;
+  final AssetRepository repository;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  @override
+  State<_AttachmentTile> createState() => _AttachmentTileState();
+}
+
+class _AttachmentTileState extends State<_AttachmentTile> {
+  late final Future<Uint8List?> _bytesFuture = widget.repository
+      .attachmentBytes(widget.attachment.id);
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bytesFuture.then((bytes) {
+      if (mounted && bytes != null) {
+        setState(() => _loaded = true);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final kb = (widget.attachment.byteSize / 1024).round();
+    return Semantics(
+      label: '${widget.attachment.name} · $kb KB',
+      child: FutureBuilder<Uint8List?>(
+        future: _bytesFuture,
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          return GestureDetector(
+            // 字节未就绪时点按不进查看器，避免打开空白页
+            onTap: _loaded ? widget.onTap : null,
+            onLongPress: widget.onLongPress,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 96,
+                height: 96,
+                child: bytes == null
+                    ? const ColoredBox(
+                        color: AppColors.paper2,
+                        child: Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      )
+                    : Image.memory(
+                        bytes,
+                        cacheWidth: 240,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                      ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AttachmentViewerScreen extends StatelessWidget {
+  const _AttachmentViewerScreen({
+    required this.attachment,
+    required this.repository,
+  });
+
+  final AssetAttachment attachment;
+  final AssetRepository repository;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(attachment.name)),
+      body: FutureBuilder<Uint8List?>(
+        future: repository.attachmentBytes(attachment.id),
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          if (bytes == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return InteractiveViewer(
+            maxScale: 5,
+            child: Center(child: Image.memory(bytes)),
+          );
+        },
       ),
     );
   }

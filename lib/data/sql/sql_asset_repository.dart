@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:sqflite_common/sqlite_api.dart';
 import 'package:sqflite_sqlcipher/sqlite_api.dart'
     show SqlCipherOpenDatabaseOptions;
 
 import '../../domain/asset.dart';
+import '../../domain/asset_attachment.dart';
+import '../../domain/asset_note.dart';
 import '../../domain/relation.dart';
 import '../asset_repository.dart';
 
@@ -19,7 +22,7 @@ class SqlAssetRepository implements AssetRepository {
     this._password,
   });
 
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 3;
 
   final DatabaseFactory _factory;
   final String _path;
@@ -72,6 +75,36 @@ CREATE TABLE relations(
       'CREATE INDEX idx_relations_from ON relations(from_asset_id)',
     );
     await db.execute('CREATE INDEX idx_relations_to ON relations(to_asset_id)');
+    await _createNotesAndAttachmentsSchema(db);
+  }
+
+  /// v3 新增：资产备注与图片附件表（附件字节为 BLOB，随库加密）。
+  Future<void> _createNotesAndAttachmentsSchema(Database db) async {
+    await db.execute('''
+CREATE TABLE asset_notes(
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+''');
+    await db.execute(
+      'CREATE INDEX idx_asset_notes_asset ON asset_notes(asset_id)',
+    );
+    await db.execute('''
+CREATE TABLE asset_attachments(
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  mime_type TEXT,
+  byte_size INTEGER NOT NULL DEFAULT 0,
+  bytes BLOB NOT NULL,
+  created_at TEXT NOT NULL
+)
+''');
+    await db.execute(
+      'CREATE INDEX idx_asset_attachments_asset ON asset_attachments(asset_id)',
+    );
   }
 
   Future<void> _upgradeSchema(
@@ -83,6 +116,9 @@ CREATE TABLE relations(
       await db.execute(
         'ALTER TABLE assets ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0',
       );
+    }
+    if (oldVersion < 3) {
+      await _createNotesAndAttachmentsSchema(db);
     }
   }
 
@@ -132,6 +168,12 @@ CREATE TABLE relations(
         where: 'from_asset_id = ? OR to_asset_id = ?',
         whereArgs: [id, id],
       );
+      await txn.delete('asset_notes', where: 'asset_id = ?', whereArgs: [id]);
+      await txn.delete(
+        'asset_attachments',
+        where: 'asset_id = ?',
+        whereArgs: [id],
+      );
     });
   }
 
@@ -168,6 +210,78 @@ CREATE TABLE relations(
       whereArgs: [assetId, assetId],
     );
     return rows.map(_relationFromRow).toList(growable: false);
+  }
+
+  @override
+  Future<List<AssetNote>> listNotes(String assetId) async {
+    final rows = await (await database).query(
+      'asset_notes',
+      where: 'asset_id = ?',
+      whereArgs: [assetId],
+      orderBy: 'created_at DESC, id DESC',
+    );
+    return rows.map(_noteFromRow).toList(growable: false);
+  }
+
+  @override
+  Future<void> addNote(AssetNote note) async {
+    await (await database).insert('asset_notes', _noteToRow(note));
+  }
+
+  @override
+  Future<void> deleteNote(String noteId) async {
+    await (await database).delete(
+      'asset_notes',
+      where: 'id = ?',
+      whereArgs: [noteId],
+    );
+  }
+
+  @override
+  Future<List<AssetAttachment>> listAttachments(String assetId) async {
+    final rows = await (await database).query(
+      'asset_attachments',
+      where: 'asset_id = ?',
+      whereArgs: [assetId],
+      // 列表查询不读 BLOB，只取元数据
+      columns: ['id', 'asset_id', 'name', 'mime_type', 'byte_size',
+          'created_at'],
+      orderBy: 'created_at DESC, id DESC',
+    );
+    return rows.map(_attachmentFromRow).toList(growable: false);
+  }
+
+  @override
+  Future<void> addAttachment(AssetAttachment attachment, List<int> bytes) async {
+    final db = await database;
+    await db.insert('asset_attachments', {
+      ..._attachmentToRow(attachment),
+      'bytes': Uint8List.fromList(bytes),
+    });
+  }
+
+  @override
+  Future<Uint8List?> attachmentBytes(String attachmentId) async {
+    final rows = await (await database).query(
+      'asset_attachments',
+      columns: ['bytes'],
+      where: 'id = ?',
+      whereArgs: [attachmentId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    return rows.first['bytes'] as Uint8List?;
+  }
+
+  @override
+  Future<void> deleteAttachment(String attachmentId) async {
+    await (await database).delete(
+      'asset_attachments',
+      where: 'id = ?',
+      whereArgs: [attachmentId],
+    );
   }
 
   Asset _assetFromRow(Map<String, Object?> row) => Asset(
@@ -213,6 +327,39 @@ CREATE TABLE relations(
     'type': relation.type.name,
     'note': relation.note,
     'created_at': relation.createdAt.toIso8601String(),
+  };
+
+  AssetNote _noteFromRow(Map<String, Object?> row) => AssetNote(
+    id: row['id'] as String,
+    assetId: row['asset_id'] as String,
+    content: row['content'] as String,
+    createdAt: DateTime.tryParse(row['created_at'] as String? ?? ''),
+  );
+
+  Map<String, Object?> _noteToRow(AssetNote note) => {
+    'id': note.id,
+    'asset_id': note.assetId,
+    'content': note.content,
+    'created_at': note.createdAt.toIso8601String(),
+  };
+
+  AssetAttachment _attachmentFromRow(Map<String, Object?> row) =>
+      AssetAttachment(
+        id: row['id'] as String,
+        assetId: row['asset_id'] as String,
+        name: row['name'] as String,
+        mimeType: row['mime_type'] as String?,
+        byteSize: row['byte_size'] as int? ?? 0,
+        createdAt: DateTime.tryParse(row['created_at'] as String? ?? ''),
+      );
+
+  Map<String, Object?> _attachmentToRow(AssetAttachment attachment) => {
+    'id': attachment.id,
+    'asset_id': attachment.assetId,
+    'name': attachment.name,
+    'mime_type': attachment.mimeType,
+    'byte_size': attachment.byteSize,
+    'created_at': attachment.createdAt.toIso8601String(),
   };
 }
 

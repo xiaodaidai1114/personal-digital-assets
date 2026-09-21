@@ -1,6 +1,7 @@
 import 'package:uuid/uuid.dart';
 
 import '../domain/asset.dart';
+import '../domain/asset_note.dart';
 import '../domain/relation.dart';
 import 'asset_repository.dart';
 
@@ -103,5 +104,29 @@ Future<void> seedDemoData(AssetRepository repository) async {
   ];
   for (final relation in relations) {
     await repository.saveRelation(relation);
+  }
+
+  final notes = [
+    AssetNote(
+      id: uuid.v4(),
+      assetId: subscriptionId,
+      content: '已开启二次验证，恢复码放在封缄里',
+      createdAt: DateTime.now().subtract(const Duration(days: 6)),
+    ),
+    AssetNote(
+      id: uuid.v4(),
+      assetId: subscriptionId,
+      content: '续费邮件每月 28 号前提醒，记得核对金额',
+      createdAt: DateTime.now().subtract(const Duration(days: 2)),
+    ),
+    AssetNote(
+      id: uuid.v4(),
+      assetId: emailId,
+      content: '主邮箱用于注册重要服务，不参与抽奖等活动',
+      createdAt: DateTime.now().subtract(const Duration(days: 4)),
+    ),
+  ];
+  for (final note in notes) {
+    await repository.addNote(note);
   }
 }
