@@ -1,0 +1,49 @@
+name: release
+
+# 推送 release-v<版本> 形式的触发 tag 时,为对应正式 tag(如 v1.3.0)创建 Release。
+# 说明文案取 .github/release-notes/<版本>.md;APK 由本地构建后经
+# uploads.github.com 上传(本机 api.github.com 不通,release id 经
+# release-meta 分支传回本地)。
+on:
+  push:
+    tags:
+      - 'release-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Derive target tag
+        run: echo "TARGET_TAG=${GITHUB_REF_NAME#release-}" >> "$GITHUB_ENV"
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$TARGET_TAG" -R "$GITHUB_REPOSITORY"; then
+            echo "release already exists"
+          else
+            gh release create "$TARGET_TAG" -R "$GITHUB_REPOSITORY" \
+              --title "$TARGET_TAG" \
+              --notes-file ".github/release-notes/${TARGET_TAG}.md"
+          fi
+      - name: Publish release id for local asset upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TARGET_TAG" --jq '.id')
+          echo "release id = $ID"
+          git config user.name "release-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch origin guoxingyun
+          git checkout -B release-meta origin/guoxingyun
+          echo "$TARGET_TAG $ID" > .release-id
+          git add .release-id
+          git commit -m "chore: expose release id for ${TARGET_TAG}"
+          git push origin release-meta
