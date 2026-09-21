@@ -44,7 +44,8 @@ UI 设计方向已定为「纸墨加密账册」，唯一视觉依据是 `docs/d
 - 每次 pub 相关命令前设置国内镜像：`$env:PUB_HOSTED_URL='https://pub.flutter-io.cn'; $env:FLUTTER_STORAGE_BASE_URL='https://storage.flutter-io.cn'`（已写入用户环境变量）。
 - 仓库路径含中文会导致 `flutter analyze` 崩溃（analysis_server LSP bug），验证用 `dart analyze` + `flutter test`。
 - JDK 17（Temurin `C:\dev\jdk-17.0.20.1+1`）与 Android SDK（`C:\dev\android-sdk`：platform-tools、platforms;android-36、build-tools;36.0.0，licenses 已接受）已于 2026-09-21 重装。gradle 需 `JAVA_HOME` 指向该 JDK，flutter CLI 需 `ANDROID_HOME=C:\dev\android-sdk`（已用 `flutter config --android-sdk` 持久化）。
-- 打 APK：在 `C:\dev\pda` 运行 `flutter build apk --release`，产物在 `build\app\outputs\flutter-apk\app-release.apk`。
+- 打 APK：**必须在 `C:\dev\pda-release` worktree（`git worktree add --detach C:/dev/pda-release <commit>`）里构建**——flutter 工具会把 junction `C:\dev\pda` 规范化回中文真实路径，gen_snapshot/AOT 读不了非 ASCII 路径（app.dill 报 Unable to read file，exit 255）。构建前把 `android/local.properties` 复制过去；产物在 `build\app\outputs\flutter-apk\app-release.apk`。
+- 发 Release：本机 `api.github.com` 不通（Clash 规则所致，`uploads.github.com` 走 `http://127.0.0.1:7897` 代理可用）。流程：更新 `.github/release-notes/<版本>.md` → 推 `release-v<版本>` 触发 tag（workflow 建 Release 并把 release id 推到 `release-meta` 分支）→ `git fetch` 读 `.release-id` → 本地 curl 走 7897 把 APK POST 到 `uploads.github.com/repos/<repo>/releases/<id>/assets` → 删除 `release-meta` 分支与触发 tag。参考脚本 `C:\dev\release_v130.sh`。
 - Gradle 发行包走腾讯镜像（`android/gradle/wrapper/gradle-wrapper.properties` 已配置）；maven 依赖走阿里云镜像（`android/settings.gradle.kts`、`android/build.gradle.kts` 已配置，另 `C:\Users\admin\.gradle\init.d\cn-mirrors.init.gradle.kts` 为 flutter SDK 自带构建注入镜像），官方源在本机直连会卡死。
 - 验证：`flutter analyze` + `flutter test`。
 - 本机 git 对 github.com 配置了失效代理（socks5://127.0.0.1:1081），推送时需加参数绕过：`git -c http.https://github.com.proxy= push`。
