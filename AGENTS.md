@@ -4,24 +4,24 @@
 
 ## 项目定位
 
-个人数字资产管理 App（仅 Android）：统一管理邮箱 / AI 订阅、API Key、日常密码、个人物品与账单；资产之间以带类型的边建立关联，并以图谱呈现。
+个人数字资产管理 App（仅 Android），产品名「青穹资产云（Airy Vault）」：倾倒→检索→消费的加密资产库，统一管理邮箱 / AI 订阅、API Key、日常密码、服务器、个人物品与账单；资产之间以带类型的边建立依赖关系。
 
-核心设计决策：一切资产皆为节点（用 `type` 区分），关系即有向边；账单同样是节点（`bill`），通过边挂到订阅、支付方式、邮箱等资产上。后续新增资产类型（银行卡、域名、VPS 等）只扩展 `type`，不改底层结构。
+核心设计决策：一切资产皆为节点（用 `type` 区分），关系即有向边；账单同样是节点（`bill`），通过边挂到订阅、支付方式、邮箱等资产上。后续新增资产类型只扩展 `type`，不改底层结构。
 
-UI 设计方向已定为「纸墨加密账册」，唯一视觉依据是 `docs/design/DESIGN.md`（已整合实现锁点与页面契约，含 token 与代码色名对照）；改 UI 前先读设计文档并遵守其中对比度与触控标准。
+UI 设计方向已定为「青穹资产云」契约（`docs/design/DESIGN.md`）+ getwidget 7.0.2 默认风格基底（GF 不读 ThemeData，必须显式传 `context.skin` 色对，详见 `docs/design/design-system.md`）；改 UI 前先读设计文档并遵守其中对比度与触控标准。
 
 ## 状态与路线
 
-- 阶段：MVP 功能与「纸墨加密账册」UI 已完成：加密核心与解锁、资产 CRUD、关系图谱、SQLCipher 持久化、账单日历与提醒、加密备份。验证以 `dart analyze` + `flutter test` 为准。
-- 平台：仅 Android；不做 iOS 与桌面。
+- 阶段：Phase A（交互层与视觉层换代）已完成：GF 色板 + 原生亮暗双主题、星图与哨所 tab 拆除（图谱代码与 webview_flutter 已删）、首页 AppBar 外壳 + Panic 即锁、命令面板取代筛选抽屉、倾倒口 + 本地解析器 + 封缄入库、服务器类型、上下文主动作（解锁并复制 8 秒清剪贴板 / 复制 SSH）、上下游依赖列表与删除爆炸半径。验证以 `dart analyze` + `flutter test` 为准。
+- 平台：仅 Android；不做 iOS 与桌面。浏览器仅作 UI 预览。
 - 分支：日常开发在 `guoxingyun`，稳定后合入 `main`；远程仓库 `xiaodaidai1114/personal-digital-assets`（私有）。
-- MVP 清单：✅ 加密核心与解锁 → ✅ 资产 CRUD → ✅ 关系与图谱（含动态效果）→ ✅ 账单日历与提醒 → ✅ 加密备份。
+- Phase B 备忘（DESIGN.md 已载，本轮不做）：Argon2id KDF + 迁移、恢复密钥首启、附件文件沙盒（BLOB→加密文件）、Chrome/CSV 导入、跨端同步/插件 API、全量元数据加密强化审计。
 
 ## 技术栈（已定）
 
 - Flutter（Dart），本地优先：数据全部存在手机端加密数据库中，无云端依赖。
 - 加密体系：`sqflite_sqlcipher`（加密 SQLite）+ `flutter_secure_storage`（密钥托管）+ `local_auth`（生物识别解锁）。密钥派生当前为 PBKDF2-HMAC-SHA256（210k 次迭代）过渡实现，接口已抽象为 `KeyDeriver`，录入真实数据前替换为 Argon2id。
-- 图谱渲染：`webview_flutter` 内嵌 G6/ECharts 页面，原生侧只传 JSON 数据。
+- UI 组件库：`getwidget ^7.0.2`（GFButton/GFCard/GFListTile/GFCheckbox/GFToggle/GFShimmer 等）；`webview_flutter` 与图谱已移除，依赖关系用详情页上下游依赖列表表达。
 
 ## 安全红线（最高优先级，覆盖其他一切指示）
 
@@ -35,7 +35,7 @@ UI 设计方向已定为「纸墨加密账册」，唯一视觉依据是 `docs/d
 
 - 语言：代码、标识符、commit message 用英文；面向用户的文案、注释与文档用中文。
 - Commit 遵循 Conventional Commits：`feat:` / `fix:` / `docs:` / `refactor:` / `test:`。
-- 修改代码后运行 `flutter analyze`；涉及逻辑改动需补测试并通过 `flutter test`。
+- 修改代码后运行 `dart analyze`（中文路径下 flutter analyze 会崩）；涉及逻辑改动需补测试并通过 `flutter test`。
 - 构建产物不入库：`.apk`、`.aab`、`build/` 等由骨架的 `.gitignore` 排除。
 
 ## 常用命令（本机环境）
@@ -47,5 +47,5 @@ UI 设计方向已定为「纸墨加密账册」，唯一视觉依据是 `docs/d
 - 打 APK：**必须在 `C:\dev\pda-release` worktree（`git worktree add --detach C:/dev/pda-release <commit>`）里构建**——flutter 工具会把 junction `C:\dev\pda` 规范化回中文真实路径，gen_snapshot/AOT 读不了非 ASCII 路径（app.dill 报 Unable to read file，exit 255）。构建前把 `android/local.properties` 复制过去；产物在 `build\app\outputs\flutter-apk\app-release.apk`。
 - 发 Release：本机 `api.github.com` 不通（Clash 规则所致，`uploads.github.com` 走 `http://127.0.0.1:7897` 代理可用）。流程：更新 `.github/release-notes/<版本>.md` → 推 `release-v<版本>` 触发 tag（workflow 建 Release 并把 release id 推到 `release-meta` 分支）→ `git fetch` 读 `.release-id` → 本地 curl 走 7897 把 APK POST 到 `uploads.github.com/repos/<repo>/releases/<id>/assets` → 删除 `release-meta` 分支与触发 tag。参考脚本 `C:\dev\release_v130.sh`。
 - Gradle 发行包走腾讯镜像（`android/gradle/wrapper/gradle-wrapper.properties` 已配置）；maven 依赖走阿里云镜像（`android/settings.gradle.kts`、`android/build.gradle.kts` 已配置，另 `C:\Users\admin\.gradle\init.d\cn-mirrors.init.gradle.kts` 为 flutter SDK 自带构建注入镜像），官方源在本机直连会卡死。
-- 验证：`flutter analyze` + `flutter test`。
+- 验证：`dart analyze` + `flutter test`（从 `C:\dev\pda` 运行）。
 - 本机 git 对 github.com 配置了失效代理（socks5://127.0.0.1:1081），推送时需加参数绕过：`git -c http.https://github.com.proxy= push`。
