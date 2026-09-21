@@ -69,6 +69,8 @@ dependencies:
   http: ^1.2.0
   # 从更新提醒打开 Release / APK 下载页
   url_launcher: ^6.3.0
+  # getwidget 组件库：全 App UI 改用其默认视觉风格作为组件与视觉基底
+  getwidget: ^7.0.2
 
 dev_dependencies:
   flutter_test:
