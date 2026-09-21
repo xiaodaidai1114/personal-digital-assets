@@ -6,6 +6,8 @@ import '../app_version.dart';
 import '../vault/vault_controller.dart';
 import '../data/backup/backup_service.dart';
 import '../data/settings_store.dart';
+import '../domain/asset_attachment.dart';
+import '../domain/asset_note.dart';
 import '../theme/app_theme.dart';
 
 /// 设置：安全（锁定/自动锁定/生物识别）、数据（加密备份导出与恢复）、关于。
@@ -103,8 +105,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final assets = await widget.services.repository.listAssets();
       final relations = await widget.services.repository.listRelations();
-      final content = await BackupService(cipher)
-          .exportEncrypted(assets, relations);
+      final notes = <AssetNote>[];
+      final attachments = <AssetAttachment>[];
+      final attachmentBytes = <String, List<int>>{};
+      for (final asset in assets) {
+        notes.addAll(await widget.services.repository.listNotes(asset.id));
+        for (final attachment
+            in await widget.services.repository.listAttachments(asset.id)) {
+          attachments.add(attachment);
+          final bytes =
+              await widget.services.repository.attachmentBytes(attachment.id);
+          if (bytes != null) {
+            attachmentBytes[attachment.id] = bytes;
+          }
+        }
+      }
+      final content = await BackupService(cipher).exportEncrypted(
+        assets,
+        relations,
+        notes: notes,
+        attachments: attachments,
+        attachmentBytes: attachmentBytes,
+      );
       final filename =
           'airy-vault-backup-${DateFormat('yyyyMMdd').format(DateTime.now())}.avbak';
       await widget.services.backupFileStore.exportFile(content, filename);
@@ -137,7 +159,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('从备份恢复'),
-        content: const Text('将把备份中的资产与关联合并进当前数据（同 ID 覆盖）。确定继续吗？'),
+        content: const Text(
+          '将把备份中的资产、关联、备注与图片合并进当前数据（同 ID 覆盖）。确定继续吗？',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -162,12 +186,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       for (final relation in backup.relations) {
         await widget.services.repository.saveRelation(relation);
       }
+      for (final note in backup.notes) {
+        await widget.services.repository.addNote(note);
+      }
+      for (final attachment in backup.attachments) {
+        await widget.services.repository.addAttachment(
+          attachment,
+          backup.attachmentBytes[attachment.id] ?? const [],
+        );
+      }
       await widget.services.syncReminders();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '已恢复 ${backup.assets.length} 条资产、${backup.relations.length} 条关联',
+              '已恢复 ${backup.assets.length} 条资产、'
+              '${backup.relations.length} 条关联、'
+              '${backup.notes.length} 条备注、'
+              '${backup.attachments.length} 张图片',
             ),
           ),
         );
