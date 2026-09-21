@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:getwidget/getwidget.dart';
 
 import '../theme/app_theme.dart';
 import '../vault/vault_controller.dart';
@@ -278,7 +279,11 @@ class _VaultMark extends StatelessWidget {
       shape: BoxShape.circle,
       border: Border.all(color: context.skin.textPrimary, width: 1.5),
     ),
-    child: Icon(Icons.shield_outlined, color: context.skin.textPrimary, size: 26),
+    child: Icon(
+      Icons.shield_outlined,
+      color: context.skin.textPrimary,
+      size: 26,
+    ),
   );
 }
 
@@ -298,9 +303,11 @@ class _SubmitButton extends StatelessWidget {
   Widget build(BuildContext context) => AnimatedSwitcher(
     duration: const Duration(milliseconds: 200),
     child: busy
-        ? FilledButton(
+        ? GFButton(
             key: const ValueKey('busy'),
             onPressed: null,
+            blockButton: true,
+            disabledTextColor: context.skin.textSecondary,
             child: const Padding(
               padding: EdgeInsets.symmetric(vertical: 2),
               child: Column(
@@ -316,10 +323,14 @@ class _SubmitButton extends StatelessWidget {
               ),
             ),
           )
-        : FilledButton(
+        : GFButton(
             key: const ValueKey('idle'),
             onPressed: onPressed,
-            child: Text(label),
+            blockButton: true,
+            size: GFSize.LARGE,
+            color: context.skin.primary,
+            textColor: context.skin.onPrimary,
+            text: label,
           ),
   );
 }

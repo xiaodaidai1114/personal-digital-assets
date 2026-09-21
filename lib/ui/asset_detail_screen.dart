@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:getwidget/getwidget.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -231,7 +232,39 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除资产'),
-        content: Text('确定删除「${asset.title}」吗？相关关联也会一并移除。'),
+        content: _relations.isEmpty
+            ? Text('确定删除「${asset.title}」吗？相关关联也会一并移除。')
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '删除「${asset.title}」将波及 ${_relations.length} 条上下游依赖（爆炸半径）：',
+                  ),
+                  const SizedBox(height: 8),
+                  for (final relation in _relations.take(5))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 14,
+                            color: skin.danger,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _relatedAssets[relation.id]?.title ?? '未知资产',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_relations.length > 5)
+                    Text('…等共 ${_relations.length} 项受影响资产'),
+                ],
+              ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -483,7 +516,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Card(
+            _DetailCard(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -572,7 +605,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
               const SizedBox(height: 20),
               Text('字段', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
-              Card(
+              _DetailCard(
                 child: Column(
                   children: [
                     for (final entry in asset.fields.entries.toList()) ...[
@@ -629,7 +662,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    '关联',
+                    '上下游依赖',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -642,20 +675,20 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
             ),
             const SizedBox(height: 8),
             if (_relations.isEmpty)
-              const Card(
+              _DetailCard(
                 child: Padding(
                   padding: EdgeInsets.all(16),
                   child: Column(
                     children: [
                       Icon(Icons.link_outlined, size: 32),
                       SizedBox(height: 8),
-                      Text('资产之间还没有关联'),
+                      Text('资产之间还没有依赖'),
                     ],
                   ),
                 ),
               )
             else
-              Card(
+              _DetailCard(
                 child: Column(
                   children: [
                     for (final relation in _relations) ...[
@@ -667,6 +700,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
                           size: 34,
                         ),
                         title: Text(
+                          '${relation.fromAssetId == asset.id ? '下游' : '上游'} · '
                           '${relation.type.label}：${_relatedAssets[relation.id]?.title ?? '未知资产'}',
                         ),
                         subtitle: Text(
@@ -856,7 +890,7 @@ class _NotesCardState extends State<_NotesCard> {
         ),
         const SizedBox(height: 8),
         if (_composing)
-          Card(
+          _DetailCard(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -896,7 +930,7 @@ class _NotesCardState extends State<_NotesCard> {
             ),
           ),
         if (widget.notes.isEmpty && !_composing)
-          const Card(
+          _DetailCard(
             child: Padding(
               padding: EdgeInsets.all(16),
               child: Column(
@@ -909,7 +943,7 @@ class _NotesCardState extends State<_NotesCard> {
             ),
           )
         else if (widget.notes.isNotEmpty)
-          Card(
+          _DetailCard(
             child: Column(
               children: [
                 for (final note in widget.notes) ...[
@@ -981,7 +1015,7 @@ class _AttachmentsCard extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         if (attachments.isEmpty)
-          const Card(
+          _DetailCard(
             child: Padding(
               padding: EdgeInsets.all(16),
               child: Column(
@@ -994,7 +1028,7 @@ class _AttachmentsCard extends StatelessWidget {
             ),
           )
         else
-          Card(
+          _DetailCard(
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Wrap(
@@ -1270,4 +1304,24 @@ class _AddRelationSheetState extends State<_AddRelationSheet> {
       ),
     );
   }
+}
+
+/// GFCard 皮肤适配：GF 不读 ThemeData，显式传 surface/outline/零边距。
+class _DetailCard extends StatelessWidget {
+  const _DetailCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => GFCard(
+    color: context.skin.surface,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: BorderSide(color: context.skin.outline),
+    ),
+    margin: EdgeInsets.zero,
+    padding: EdgeInsets.zero,
+    content: child,
+  );
 }

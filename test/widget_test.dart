@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:getwidget/getwidget.dart';
 import 'package:personal_digital_assets/app.dart';
 import 'package:personal_digital_assets/crypto/kdf.dart';
 import 'package:personal_digital_assets/data/app_update.dart';
@@ -26,7 +27,7 @@ Future<void> unlockApp(
   await tester.pump();
   await tester.enterText(find.byType(TextFormField).first, 'test-password-123');
   await tester.enterText(find.byType(TextFormField).last, 'test-password-123');
-  await tester.tap(find.byType(FilledButton));
+  await tester.tap(find.byType(GFButton));
   await tester.pump();
   await tester.pumpAndSettle();
 }
@@ -135,8 +136,7 @@ void main() {
       (call) async {
         switch (call.method) {
           case 'Clipboard.setData':
-            clipboardText =
-                (call.arguments as Map?)?['text'] as String? ?? '';
+            clipboardText = (call.arguments as Map?)?['text'] as String? ?? '';
           case 'Clipboard.getData':
             return <String, Object>{'text': clipboardText};
         }
@@ -166,6 +166,41 @@ void main() {
     await tester.tap(find.text('复制 SSH 指令'));
     await tester.pump();
     expect(clipboardText, 'ssh -p 2222 deploy@example.com');
+  });
+
+  testWidgets('详情显示上下游依赖并在删除时提示爆炸半径', (tester) async {
+    await unlockApp(tester);
+    for (
+      var attempt = 0;
+      attempt < 4 && find.text('AI 助手 API Key').evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).first, const Offset(0, -180));
+      await tester.pump();
+    }
+    await tester.tap(find.text('AI 助手 API Key').last);
+    await tester.pumpAndSettle();
+    // 关联区改为上下游依赖列表（星图退役后的依赖视图），列表深处用 scrollUntilVisible
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('上下游依赖'),
+      200,
+      scrollable: scrollable,
+    );
+    await tester.pump();
+    expect(find.text('上下游依赖'), findsOneWidget);
+    expect(find.textContaining('属于：AI 助手订阅'), findsOneWidget);
+    expect(find.textContaining('存储在：安卓手机'), findsOneWidget);
+    // 滚到底部后 AppBar 被顶走，回滚一点再点删除
+    await tester.drag(find.byType(ListView).first, const Offset(0, 160));
+    await tester.pump();
+    await tester.tap(find.byTooltip('删除'));
+    await tester.pumpAndSettle();
+    // 删除确认展示爆炸半径：受影响的关联资产清单
+    expect(find.textContaining('爆炸半径'), findsOneWidget);
+    expect(find.text('AI 助手订阅'), findsWidgets);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('到期清单独立页显示提醒区与月视图', (tester) async {

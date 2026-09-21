@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:getwidget/getwidget.dart';
 import 'package:intl/intl.dart';
 
 import '../app_services.dart';
@@ -9,6 +10,7 @@ import '../data/settings_store.dart';
 import '../domain/asset_attachment.dart';
 import '../domain/asset_note.dart';
 import '../theme/app_theme.dart';
+import 'calendar_screen.dart';
 
 /// 设置：安全（锁定/自动锁定/生物识别）、数据（加密备份导出与恢复）、关于。
 class SettingsScreen extends StatefulWidget {
@@ -199,96 +201,125 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('设置')),
-    body: ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const _SectionTitle('外观'),
-        Card(
-          child: _AppearanceTile(
-            services: widget.services,
-            onThemeModeChanged: widget.onThemeModeChanged,
-          ),
-        ),
-        const _SectionTitle('安全'),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: context.skin.danger,
-                side: BorderSide(color: context.skin.danger),
-              ),
-              onPressed: _lockNow,
-              icon: const Icon(Icons.lock_outline),
-              label: const Text('立即锁定'),
+  Widget build(BuildContext context) {
+    final skin = context.skin;
+    return Scaffold(
+      appBar: AppBar(title: const Text('设置')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const _SectionTitle('外观'),
+          _SkinCard(
+            child: _AppearanceTile(
+              services: widget.services,
+              onThemeModeChanged: widget.onThemeModeChanged,
             ),
           ),
-        ),
-        Card(
-          child: Column(
-            children: [
-              FutureBuilder<Duration?>(
-                future: widget.services.settingsStore.autoLockDelay(),
-                builder: (context, snapshot) {
-                  final delay = snapshot.data;
-                  return ListTile(
-                    leading: const Icon(Icons.timer_outlined),
-                    title: const Text('自动锁定时长'),
-                    subtitle: Text(_describeDelay(delay)),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: _pickAutoLock,
-                  );
-                },
+          const _SectionTitle('安全'),
+          _SkinCard(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: GFButton(
+                onPressed: _lockNow,
+                text: '立即锁定',
+                type: GFButtonType.outline,
+                color: skin.danger,
+                textColor: skin.danger,
+                icon: Icon(Icons.lock_outline, color: skin.danger),
+                blockButton: true,
               ),
-              const Divider(height: 1),
-              _BiometricTile(controller: widget.services.controller),
-            ],
+            ),
           ),
-        ),
-        const _SectionTitle('数据'),
-        Card(
-          child: Column(
-            children: [
-              ListTile(
-                enabled: !_busy,
-                leading: const Icon(Icons.backup_outlined),
-                title: const Text('导出加密备份'),
-                subtitle: const Text('仅导出密文，不含任何明文'),
+          _SkinCard(
+            child: Column(
+              children: [
+                FutureBuilder<Duration?>(
+                  future: widget.services.settingsStore.autoLockDelay(),
+                  builder: (context, snapshot) {
+                    final delay = snapshot.data;
+                    return ListTile(
+                      leading: const Icon(Icons.timer_outlined),
+                      title: const Text('自动锁定时长'),
+                      subtitle: Text(_describeDelay(delay)),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _pickAutoLock,
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                _BiometricTile(controller: widget.services.controller),
+              ],
+            ),
+          ),
+          const _SectionTitle('提醒'),
+          _SkinCard(
+            child: Builder(
+              builder: (context) => ListTile(
+                leading: const Icon(Icons.event_outlined),
+                title: const Text('到期与扣款清单'),
+                subtitle: const Text('临期订阅与账单日历（原哨所，入口藏于此）'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: _exportBackup,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CalendarScreen(
+                      controller: widget.services.controller,
+                      repository: widget.services.repository,
+                      onDataChanged: widget.services.syncReminders,
+                    ),
+                  ),
+                ),
               ),
-              const Divider(height: 1),
-              ListTile(
-                enabled: !_busy,
-                leading: const Icon(Icons.restore_outlined),
-                title: const Text('从备份恢复'),
-                subtitle: const Text('选择 .avbak 备份文件合并恢复'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _restoreBackup,
-              ),
-            ],
+            ),
           ),
-        ),
-        const _SectionTitle('关于'),
-        const Card(
-          child: ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('当前版本'),
-            subtitle: Text('v${AppVersion.current} · 纸墨加密账册'),
+          const _SectionTitle('数据'),
+          _SkinCard(
+            child: Column(
+              children: [
+                ListTile(
+                  enabled: !_busy,
+                  leading: const Icon(Icons.backup_outlined),
+                  title: const Text('导出加密备份'),
+                  subtitle: const Text('仅导出密文，不含任何明文'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _exportBackup,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  enabled: !_busy,
+                  leading: const Icon(Icons.restore_outlined),
+                  title: const Text('从备份恢复'),
+                  subtitle: const Text('选择 .avbak 备份文件合并恢复'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _restoreBackup,
+                ),
+              ],
+            ),
           ),
-        ),
-        const Card(
-          child: ListTile(
-            leading: Icon(Icons.route_outlined),
-            title: Text('路线图阶段'),
-            subtitle: Text('SQLCipher 持久化 ✓ · G6 图谱 ✓ · 账单日历 ✓ · 加密备份 ✓'),
+          const _SectionTitle('关于'),
+          _SkinCard(
+            child: GFListTile(
+              color: Colors.transparent,
+              listItemTextColor: skin.textPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              avatar: const Icon(Icons.info_outline),
+              title: const Text('当前版本'),
+              subTitleText: 'v${AppVersion.current} · 青穹资产云',
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+          _SkinCard(
+            child: GFListTile(
+              color: Colors.transparent,
+              listItemTextColor: skin.textPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              avatar: const Icon(Icons.route_outlined),
+              title: const Text('路线图阶段'),
+              subTitleText: 'SQLCipher 持久化 ✓ · 命令面板 ✓ · 倾倒入库 ✓ · 加密备份 ✓',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   String _describeDelay(Duration? delay) {
     if (delay == null) {
@@ -403,8 +434,8 @@ class _BiometricTileState extends State<_BiometricTile> {
     builder: (context, snapshot) {
       final available = snapshot.data?.$1 ?? false;
       final enabled = snapshot.data?.$2 ?? false;
-      return SwitchListTile(
-        secondary: const Icon(Icons.fingerprint),
+      return ListTile(
+        leading: const Icon(Icons.fingerprint),
         title: const Text('生物识别解锁'),
         subtitle: Text(
           !available
@@ -413,10 +444,25 @@ class _BiometricTileState extends State<_BiometricTile> {
               ? '已开启'
               : '开启后可用指纹/面容快速解锁',
         ),
-        value: enabled,
-        onChanged: available
-            ? (value) async {
-                await widget.controller.setBiometricEnabled(value);
+        trailing: available
+            ? GFToggle(
+                value: enabled,
+                type: GFToggleType.ios,
+                enabledThumbColor: context.skin.surface,
+                enabledTrackColor: context.skin.primary,
+                disabledThumbColor: context.skin.surface,
+                disabledTrackColor: context.skin.outline,
+                onChanged: (value) async {
+                  await widget.controller.setBiometricEnabled(value ?? false);
+                  if (mounted) {
+                    setState(() {});
+                  }
+                },
+              )
+            : null,
+        onTap: available
+            ? () async {
+                await widget.controller.setBiometricEnabled(!enabled);
                 if (mounted) {
                   setState(() {});
                 }
@@ -436,5 +482,25 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
     child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+  );
+}
+
+/// GFCard 皮肤适配：GF 不读 ThemeData，显式传 surface/outline/零边距。
+class _SkinCard extends StatelessWidget {
+  const _SkinCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => GFCard(
+    color: context.skin.surface,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: BorderSide(color: context.skin.outline),
+    ),
+    margin: EdgeInsets.zero,
+    padding: EdgeInsets.zero,
+    content: child,
   );
 }
