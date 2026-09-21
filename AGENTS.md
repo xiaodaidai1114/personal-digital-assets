@@ -8,7 +8,7 @@
 
 核心设计决策：一切资产皆为节点（用 `type` 区分），关系即有向边；账单同样是节点（`bill`），通过边挂到订阅、支付方式、邮箱等资产上。后续新增资产类型（银行卡、域名、VPS 等）只扩展 `type`，不改底层结构。
 
-UI 设计方向已定为「纸墨加密账册」，唯一视觉依据是 `docs/design/DESIGN.md`，实现摘要见同目录其他文档；改 UI 前先读设计文档并遵守其中对比度与触控标准。
+UI 设计方向已定为「纸墨加密账册」，唯一视觉依据是 `docs/design/DESIGN.md`（已整合实现锁点与页面契约，含 token 与代码色名对照）；改 UI 前先读设计文档并遵守其中对比度与触控标准。
 
 ## 状态与路线
 
@@ -40,10 +40,10 @@ UI 设计方向已定为「纸墨加密账册」，唯一视觉依据是 `docs/d
 
 ## 常用命令（本机环境）
 
-- Flutter 不在 PATH，完整路径：`C:\dev\flutter\bin\flutter.bat`。
-- 每次 pub 相关命令前设置国内镜像：`$env:PUB_HOSTED_URL='https://pub.flutter-io.cn'; $env:FLUTTER_STORAGE_BASE_URL='https://storage.flutter-io.cn'`。
-- JDK 17：`C:\Program Files\Eclipse Adoptium\jdk-17.0.17.10-hotspot`（构建前设 `$env:JAVA_HOME`）。
-- Android SDK：`C:\dev\android-sdk`（platform-tools、android-36、build-tools 36.0.0 已装，构建前设 `$env:ANDROID_HOME`）。
+- Flutter 不在 PATH，完整路径：`C:\dev\flutter\bin\flutter.bat`（3.47.5 stable，2026-09-21 zip 安装）。`C:\dev\pda` 是指向仓库的 junction，gradle/analyze 等命令一律从该路径运行，避开中文路径。
+- 每次 pub 相关命令前设置国内镜像：`$env:PUB_HOSTED_URL='https://pub.flutter-io.cn'; $env:FLUTTER_STORAGE_BASE_URL='https://storage.flutter-io.cn'`（已写入用户环境变量）。
+- 仓库路径含中文会导致 `flutter analyze` 崩溃（analysis_server LSP bug），验证用 `dart analyze` + `flutter test`。
+- JDK 17 与 Android SDK（原 `C:\dev\android-sdk`、Eclipse Adoptium）尚未重装，打 APK 前需先安装并按本节原配置恢复。
 - 打 APK：在 `C:\dev\pda` 运行 `flutter build apk --release`，产物在 `build\app\outputs\flutter-apk\app-release.apk`。
 - Gradle 发行包走腾讯镜像（`android/gradle/wrapper/gradle-wrapper.properties` 已配置），官方源在本机直连会卡死。
 - 验证：`flutter analyze` + `flutter test`。
