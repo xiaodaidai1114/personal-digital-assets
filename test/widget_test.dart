@@ -4,11 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_digital_assets/app.dart';
 import 'package:personal_digital_assets/crypto/kdf.dart';
 import 'package:personal_digital_assets/data/app_update.dart';
+import 'package:personal_digital_assets/data/demo_data.dart';
+import 'package:personal_digital_assets/data/memory_asset_repository.dart';
 import 'package:personal_digital_assets/theme/app_theme.dart';
 import 'package:personal_digital_assets/ui/asset_detail_screen.dart';
-import 'package:personal_digital_assets/ui/graph/graph_palette.dart';
-import 'package:personal_digital_assets/ui/graph/native_graph_view.dart';
-import 'package:personal_digital_assets/ui/graph_screen.dart';
+import 'package:personal_digital_assets/ui/calendar_screen.dart';
 import 'package:personal_digital_assets/vault/vault_controller.dart';
 
 Future<void> unlockApp(
@@ -59,7 +59,7 @@ void main() {
 
   testWidgets('创建主密码后进入资产列表并显示演示数据', (tester) async {
     await unlockApp(tester);
-    expect(find.text('保险库'), findsWidgets);
+    expect(find.text('青穹资产云'), findsOneWidget);
     expect(find.text('AI 助手订阅'), findsWidgets);
   });
 
@@ -94,9 +94,21 @@ void main() {
     expect(find.text('AI 助手订阅'), findsWidgets);
   });
 
-  testWidgets('哨所显示提醒区与月视图', (tester) async {
-    await unlockApp(tester);
-    await tester.tap(find.text('哨所').last);
+  testWidgets('到期清单独立页显示提醒区与月视图', (tester) async {
+    // 哨所已转为后台提醒，到期清单页独立存在（入口藏于设置）
+    final controller = VaultController(deriver: Pbkdf2Deriver(iterations: 1000));
+    final repository = MemoryAssetRepository();
+    await seedDemoData(repository);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: CalendarScreen(
+          controller: controller,
+          repository: repository,
+          onDataChanged: () {},
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('哨所'), findsWidgets);
     final scrollable = find.byType(Scrollable).first;
@@ -107,78 +119,6 @@ void main() {
       scrollable: scrollable,
     );
     expect(find.text('10 月订阅账单'), findsWidgets);
-  });
-
-  testWidgets('星图渲染节点并把系统栏切夜色（常驻动画，用定长 pump）', (tester) async {
-    await unlockApp(tester);
-
-    // 星图移出底栏后，导航栏恒为日间纸面（路由会遮蔽底栏，先在主壳断言）
-    final navigationBar = tester.widget<NavigationBar>(
-      find.byType(NavigationBar),
-    );
-    expect(navigationBar.backgroundColor, AppSkin.light.surface);
-
-    // 星图已移出底栏，入口在资产详情页「打开星图」
-    await tester.ensureVisible(find.text('主邮箱').last);
-    await tester.tap(find.text('主邮箱').last);
-    await tester.pumpAndSettle();
-    // 局部图位于长列表深处，元素按视口物化，需滚动直到其出现
-    await tester.scrollUntilVisible(
-      find.text('打开星图'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pump();
-    await tester.tap(find.text('打开星图'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.textContaining('个节点 ·'), findsOneWidget);
-    expect(find.text('清空'), findsOneWidget);
-
-    // 星图夜墨画布：状态栏/导航栏同色，图标转浅色
-    final overlay = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
-      find.descendant(
-        of: find.byType(GraphScreen),
-        matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
-      ),
-    ).value;
-    expect(overlay.statusBarIconBrightness, Brightness.light);
-    expect(overlay.statusBarColor, kGraphBackground);
-    expect(overlay.systemNavigationBarColor, kGraphSurface);
-  });
-
-  testWidgets('星图搜索聚焦一跳时保留全部节点', (tester) async {
-    await unlockApp(tester);
-    await tester.ensureVisible(find.text('主邮箱').last);
-    await tester.tap(find.text('主邮箱').last);
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('打开星图'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pump();
-    await tester.tap(find.text('打开星图'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-
-    // 详情页局部图也在树中，限定星图页内的图谱视图
-    final graphFinder = find.descendant(
-      of: find.byType(GraphScreen),
-      matching: find.byType(NativeGraphView),
-    );
-    final totalCount =
-        tester.widget<NativeGraphView>(graphFinder).assets.length;
-
-    await tester.enterText(
-      find.widgetWithText(TextField, '搜索节点，自动保留一跳邻域'),
-      'AI 助手订阅',
-    );
-    await tester.pump();
-
-    final graph = tester.widget<NativeGraphView>(graphFinder);
-    expect(graph.assets.length, totalCount);
-    expect(graph.focusIds, isNotEmpty);
   });
 
   testWidgets('宽屏保险库使用集合、列表和详情三栏', (tester) async {
@@ -289,31 +229,6 @@ void main() {
     expect(find.textContaining('完整 Key'), findsOneWidget);
   });
 
-  testWidgets('图谱筛选抽屉保持夜墨文本', (tester) async {
-    await unlockApp(tester);
-    await tester.ensureVisible(find.text('主邮箱').last);
-    await tester.tap(find.text('主邮箱').last);
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('打开星图'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pump();
-    await tester.tap(find.text('打开星图'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('筛选'));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    final titleContext = tester.element(find.text('图谱筛选'));
-    expect(Theme.of(titleContext).brightness, Brightness.dark);
-    expect(
-      Theme.of(titleContext).scaffoldBackgroundColor,
-      kGraphBackground,
-    );
-  });
-
   testWidgets('新增资产先选择类型并展示对应字段模板', (tester) async {
     await unlockApp(tester);
     await tester.tap(find.byType(FloatingActionButton));
@@ -357,7 +272,7 @@ void main() {
 
   testWidgets('设置页显示安全与数据功能项', (tester) async {
     await unlockApp(tester);
-    await tester.tap(find.text('设置'));
+    await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
     expect(find.text('界面模式'), findsOneWidget);
     expect(find.text('原生亮暗双主题，跟随系统时自动切换'), findsOneWidget);

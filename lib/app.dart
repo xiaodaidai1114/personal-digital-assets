@@ -19,7 +19,6 @@ import 'crypto/kdf.dart';
 import 'theme/app_theme.dart';
 import 'app_version.dart';
 import 'ui/asset_list_screen.dart';
-import 'ui/calendar_screen.dart';
 import 'ui/settings_screen.dart';
 import 'ui/unlock_screen.dart';
 import 'vault/auto_lock.dart';
@@ -218,17 +217,18 @@ class _AppRootState extends State<AppRoot> {
           .copyWith(
             statusBarColor: skin.canvas,
             systemNavigationBarColor: skin.canvas,
-            systemNavigationBarIconBrightness:
-                isDark ? Brightness.light : Brightness.dark,
+            systemNavigationBarIconBrightness: isDark
+                ? Brightness.light
+                : Brightness.dark,
           ),
       child: Stack(
         children: [
           _controller.isUnlocked
               ? MainShell(
-                services: widget.services,
-                autoLock: _autoLock,
-                onThemeModeChanged: widget.onThemeModeChanged,
-              )
+                  services: widget.services,
+                  autoLock: _autoLock,
+                  onThemeModeChanged: widget.onThemeModeChanged,
+                )
               : UnlockScreen(controller: _controller),
           if (_openingCurtain)
             _OpeningCurtain(
@@ -301,13 +301,9 @@ class _OpeningCurtainState extends State<_OpeningCurtain>
   }
 }
 
-// 星图不再是底栏 tab（日常使用频率低），入口移至详情页「打开星图」。
-const _desktopNavItems = <(int, String, IconData)>[
-  (0, '找 · 保险库', Icons.inventory_2_outlined),
-  (1, '办 · 哨所', Icons.visibility_outlined),
-  (2, '设置', Icons.settings_outlined),
-];
-
+/// 主壳：首页即倾倒口与资产列表（DESIGN.md 青穹资产云）。
+/// 底栏与桌面导航已废除，锁定/设置入口在首页 AppBar 动作区；
+/// 哨所转为后台提醒，到期清单入口藏于设置页。
 class MainShell extends StatefulWidget {
   const MainShell({
     super.key,
@@ -325,7 +321,6 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  int _selectedIndex = 0;
   late final Future<AppReleaseInfo?> _updateFuture;
   bool _updateDismissed = false;
 
@@ -335,27 +330,19 @@ class _MainShellState extends State<MainShell> {
     _updateFuture = widget.services.updateChecker.checkLatest();
   }
 
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SettingsScreen(
+          services: widget.services,
+          onThemeModeChanged: widget.onThemeModeChanged,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final skin = context.skin;
-    final services = widget.services;
-    final pages = [
-      AssetListScreen(
-        controller: services.controller,
-        repository: services.repository,
-        onDataChanged: services.syncReminders,
-      ),
-      CalendarScreen(
-        controller: services.controller,
-        repository: services.repository,
-        onDataChanged: services.syncReminders,
-      ),
-      SettingsScreen(
-        services: services,
-        onThemeModeChanged: widget.onThemeModeChanged,
-      ),
-    ];
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
     final updateBanner = !_updateDismissed
         ? FutureBuilder<AppReleaseInfo?>(
             future: _updateFuture,
@@ -374,83 +361,18 @@ class _MainShellState extends State<MainShell> {
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) => widget.autoLock.notifyUserActive(),
-      child: Scaffold(
-        body: isDesktop
-            ? Column(
-                children: [
-                  _DesktopNavigation(
-                    selectedIndex: _selectedIndex,
-                    onSelected: (index) =>
-                        setState(() => _selectedIndex = index),
-                  ),
-                  Container(height: 1, color: skin.outline),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        ?updateBanner,
-                        Expanded(
-                          child: IndexedStack(
-                            index: _selectedIndex,
-                            children: [
-                              for (var i = 0; i < pages.length; i++)
-                                TickerMode(
-                                  enabled: i == _selectedIndex,
-                                  child: pages[i],
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              )
-            : Column(
-                children: [
-                  ?updateBanner,
-                  Expanded(
-                    child: IndexedStack(
-                      index: _selectedIndex,
-                      children: [
-                        for (var i = 0; i < pages.length; i++)
-                          TickerMode(
-                            enabled: i == _selectedIndex,
-                            child: pages[i],
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-        bottomNavigationBar: isDesktop
-            ? null
-            : NavigationBar(
-                selectedIndex: _selectedIndex,
-                onDestinationSelected: (index) =>
-                    setState(() => _selectedIndex = index),
-                backgroundColor: skin.surface,
-                indicatorColor: skin.surfaceAlt,
-                surfaceTintColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                elevation: 0,
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.inventory_2_outlined),
-                    selectedIcon: Icon(Icons.inventory_2_outlined),
-                    label: '保险库',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.visibility_outlined),
-                    selectedIcon: Icon(Icons.visibility_outlined),
-                    label: '哨所',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.settings_outlined),
-                    selectedIcon: Icon(Icons.settings),
-                    label: '设置',
-                  ),
-                ],
-              ),
+      child: Column(
+        children: [
+          ?updateBanner,
+          Expanded(
+            child: AssetListScreen(
+              controller: widget.services.controller,
+              repository: widget.services.repository,
+              onDataChanged: widget.services.syncReminders,
+              onOpenSettings: _openSettings,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -523,86 +445,6 @@ class _UpdateBanner extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DesktopNavigation extends StatelessWidget {
-  const _DesktopNavigation({
-    required this.selectedIndex,
-    required this.onSelected,
-  });
-
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = context.skin;
-    final foreground = skin.textPrimary;
-    final secondary = skin.textSecondary;
-    return Material(
-      color: skin.surface,
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 64,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 120,
-                child: Text(
-                  '青穹资产云',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(color: foreground),
-                ),
-              ),
-              const Spacer(),
-              for (final item in _desktopNavItems)
-                Padding(
-                  padding: const EdgeInsets.only(left: 6),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () => onSelected(item.$1),
-                    child: Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: selectedIndex == item.$1
-                            ? skin.surfaceAlt
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(item.$3, size: 18, color: secondary),
-                          const SizedBox(width: 8),
-                          Text(
-                            item.$2,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: selectedIndex == item.$1
-                                      ? foreground
-                                      : secondary,
-                                  fontWeight: selectedIndex == item.$1
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-            ],
           ),
         ),
       ),

@@ -16,7 +16,6 @@ import '../domain/relation.dart';
 import '../theme/app_theme.dart';
 import '../vault/vault_controller.dart';
 import 'asset_edit_screen.dart';
-import 'graph/graph_view.dart';
 import 'widgets/asset_type_badge.dart';
 import 'widgets/dashed_border.dart';
 import 'widgets/empty_state.dart';
@@ -30,7 +29,6 @@ class AssetDetailScreen extends StatefulWidget {
     this.embedded = false,
     this.onDeleted,
     this.onDataChanged,
-    this.onOpenGraph,
   });
 
   final VaultController controller;
@@ -39,7 +37,6 @@ class AssetDetailScreen extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onDeleted;
   final VoidCallback? onDataChanged;
-  final VoidCallback? onOpenGraph;
 
   @override
   State<AssetDetailScreen> createState() => _AssetDetailScreenState();
@@ -366,25 +363,6 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
       await _reload();
       widget.onDataChanged?.call();
     }
-  }
-
-  Future<void> _openPreviewNode(Asset node) async {
-    final asset = _asset;
-    if (asset == null || node.id == asset.id) {
-      widget.onOpenGraph?.call();
-      return;
-    }
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AssetDetailScreen(
-          controller: widget.controller,
-          repository: widget.repository,
-          assetId: node.id,
-          onOpenGraph: widget.onOpenGraph,
-        ),
-      ),
-    );
-    await _reload();
     widget.onDataChanged?.call();
   }
 
@@ -575,24 +553,6 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
               onDelete: _deleteAttachment,
             ),
             const SizedBox(height: 20),
-            _LocalGraphCard(
-              assets: [
-                asset,
-                ..._allAssets.where(
-                  (item) => _relations.any(
-                    (relation) =>
-                        (relation.fromAssetId == asset.id &&
-                            relation.toAssetId == item.id) ||
-                        (relation.toAssetId == asset.id &&
-                            relation.fromAssetId == item.id),
-                  ),
-                ),
-              ],
-              relations: _relations,
-              onOpenGraph: widget.onOpenGraph,
-              onOpenNode: _openPreviewNode,
-            ),
-            const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
@@ -728,10 +688,7 @@ class _SealedSecretCard extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        error!,
-                        style: TextStyle(color: skin.danger),
-                      ),
+                      child: Text(error!, style: TextStyle(color: skin.danger)),
                     ),
                     TextButton(onPressed: onReveal, child: const Text('重试')),
                   ],
@@ -859,10 +816,7 @@ class _NotesCardState extends State<_NotesCard> {
                         child: const Text('取消'),
                       ),
                       const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: _save,
-                        child: const Text('保存'),
-                      ),
+                      FilledButton(onPressed: _save, child: const Text('保存')),
                     ],
                   ),
                 ],
@@ -890,9 +844,8 @@ class _NotesCardState extends State<_NotesCard> {
                   ListTile(
                     leading: Text(
                       DateFormat('MM-dd HH:mm').format(note.createdAt),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: skin.textSecondary,
-                      ),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: skin.textSecondary),
                     ),
                     title: Text(note.content),
                     trailing: IconButton(
@@ -1097,69 +1050,6 @@ class _AttachmentViewerScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-class _LocalGraphCard extends StatelessWidget {
-  const _LocalGraphCard({
-    required this.assets,
-    required this.relations,
-    required this.onOpenGraph,
-    required this.onOpenNode,
-  });
-
-  final List<Asset> assets;
-  final List<Relation> relations;
-  final VoidCallback? onOpenGraph;
-  final ValueChanged<Asset> onOpenNode;
-
-  @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(8),
-    child: SizedBox(
-      height: 200,
-      child: Stack(
-        children: [
-          Container(
-            color: context.skin.canvas,
-            child: buildGraphView(
-              assets: assets,
-              relations: relations,
-              focusIds: assets.isEmpty ? const {} : {assets.first.id},
-              onOpenNode: onOpenNode,
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            top: 12,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '一跳关系图',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: context.skin.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (onOpenGraph != null)
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      foregroundColor: context.skin.textPrimary,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    onPressed: onOpenGraph,
-                    icon: const Icon(Icons.open_in_full, size: 16),
-                    label: const Text('打开星图'),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
 }
 
 /// 添加关联：关系类型 + 方向 + 目标资产。

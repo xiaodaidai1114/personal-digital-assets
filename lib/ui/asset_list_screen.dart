@@ -5,12 +5,10 @@ import '../data/asset_repository.dart';
 import '../domain/asset.dart';
 import '../domain/asset_filter.dart';
 import '../domain/relation.dart';
-import '../domain/reminder_actions.dart';
 import '../theme/app_theme.dart';
 import '../vault/vault_controller.dart';
 import 'asset_detail_screen.dart';
 import 'asset_edit_screen.dart';
-import 'graph_screen.dart';
 import 'widgets/asset_type_badge.dart';
 import 'widgets/empty_state.dart';
 
@@ -20,6 +18,7 @@ class AssetListScreen extends StatefulWidget {
     required this.controller,
     required this.repository,
     this.onDataChanged,
+    this.onOpenSettings,
   });
 
   final VaultController controller;
@@ -27,6 +26,9 @@ class AssetListScreen extends StatefulWidget {
 
   /// 数据变化后（新增/编辑/删除/关联变更）回调，用于重排提醒。
   final VoidCallback? onDataChanged;
+
+  /// 打开设置页（主壳持有 AppServices，列表页只拿回调）。
+  final VoidCallback? onOpenSettings;
 
   @override
   State<AssetListScreen> createState() => _AssetListScreenState();
@@ -121,19 +123,6 @@ class _AssetListScreenState extends State<AssetListScreen> {
     await _reload();
   }
 
-  Future<void> _openGraph(String focusAssetId) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => GraphScreen(
-          controller: widget.controller,
-          repository: widget.repository,
-          initialFocusId: focusAssetId,
-          showBack: true,
-        ),
-      ),
-    );
-  }
-
   Future<void> _openDetail(String assetId) async {
     if (MediaQuery.sizeOf(context).width >= 1024) {
       setState(() {
@@ -148,26 +137,10 @@ class _AssetListScreenState extends State<AssetListScreen> {
           controller: widget.controller,
           repository: widget.repository,
           assetId: assetId,
-          onOpenGraph: () => _openGraph(assetId),
         ),
       ),
     );
     await _reload();
-  }
-
-  Future<void> _handleTask(_TaskData task) async {
-    final updated = markReminderHandled(task.asset, ReminderAction.nextMonth);
-    if (updated == null) {
-      return;
-    }
-    await widget.repository.saveAsset(updated);
-    await _reload();
-    widget.onDataChanged?.call();
-    if (mounted) {
-      setState(() => _detailVersion++);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('已处理，临期事项已移出清单')));
-    }
   }
 
   Future<void> _clearDeletedDetail() async {
@@ -308,13 +281,12 @@ class _AssetListScreenState extends State<AssetListScreen> {
                   .isBefore(now.add(const Duration(days: 30))),
         )
         .length;
-    final tasks = _buildTasks(_assets);
     final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _selectionMode ? '已选 ${_selectedAssetIds.length} 项' : '保险库',
+          _selectionMode ? '已选 ${_selectedAssetIds.length} 项' : '青穹资产云',
         ),
         actions: [
           if (_selectionMode) ...[
@@ -343,9 +315,9 @@ class _AssetListScreenState extends State<AssetListScreen> {
               onPressed: _batchDelete,
               icon: const Icon(Icons.delete_outline),
             ),
-          ] else if (!_selectionMode)
+          ] else ...[
             Padding(
-              padding: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(right: 4),
               child: Center(
                 child: Text(
                   '${_assets.length}',
@@ -356,6 +328,18 @@ class _AssetListScreenState extends State<AssetListScreen> {
                 ),
               ),
             ),
+            // 一键锁定（DESIGN.md）：瞬间锁死，禁止任何二次确认
+            IconButton(
+              tooltip: '锁定',
+              onPressed: widget.controller.lock,
+              icon: const Icon(Icons.lock_outline),
+            ),
+            IconButton(
+              tooltip: '设置',
+              onPressed: widget.onOpenSettings,
+              icon: const Icon(Icons.settings_outlined),
+            ),
+          ],
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -375,7 +359,6 @@ class _AssetListScreenState extends State<AssetListScreen> {
               pinned: pinned,
               others: others,
               dueSoonCount: dueSoonCount,
-              tasks: tasks,
             )
           : _buildMainContent(
               counts: counts,
@@ -383,7 +366,6 @@ class _AssetListScreenState extends State<AssetListScreen> {
               pinned: pinned,
               others: others,
               dueSoonCount: dueSoonCount,
-              tasks: tasks,
             ),
     );
   }
@@ -394,7 +376,6 @@ class _AssetListScreenState extends State<AssetListScreen> {
     required List<Asset> pinned,
     required List<Asset> others,
     required int dueSoonCount,
-    required List<_TaskData> tasks,
   }) => Row(
     children: [
       SizedBox(
@@ -420,7 +401,6 @@ class _AssetListScreenState extends State<AssetListScreen> {
           pinned: pinned,
           others: others,
           dueSoonCount: dueSoonCount,
-          tasks: tasks,
         ),
       ),
       Container(width: 1, color: context.skin.outline),
@@ -434,7 +414,10 @@ class _AssetListScreenState extends State<AssetListScreen> {
       return Container(
         color: context.skin.canvas,
         child: Center(
-          child: Text('选择左侧资产查看详情', style: TextStyle(color: context.skin.textSecondary)),
+          child: Text(
+            '选择左侧资产查看详情',
+            style: TextStyle(color: context.skin.textSecondary),
+          ),
         ),
       );
     }
@@ -451,7 +434,6 @@ class _AssetListScreenState extends State<AssetListScreen> {
         _reload();
         widget.onDataChanged?.call();
       },
-      onOpenGraph: () => _openGraph(assetId),
     );
   }
 
@@ -496,14 +478,8 @@ class _AssetListScreenState extends State<AssetListScreen> {
     required List<Asset> pinned,
     required List<Asset> others,
     required int dueSoonCount,
-    required List<_TaskData> tasks,
   }) => Column(
     children: [
-      _HomeWatchtower(
-        tasks: tasks,
-        onTask: _handleTask,
-        onTaskDetail: (task) => _openDetail(task.asset.id),
-      ),
       _SearchHeader(
         controller: _searchController,
         filter: _filter,
@@ -659,46 +635,6 @@ class _AssetListScreenState extends State<AssetListScreen> {
         setState(() => _filter = const AssetFilter());
       },
     );
-  }
-
-  List<_TaskData> _buildTasks(List<Asset> assets) {
-    final tasks = <_TaskData>[];
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    for (final asset in assets) {
-      final dueDate = AssetFilter.dueDateOf(asset);
-      if (dueDate != null && dueDate.isBefore(today)) {
-        tasks.add(
-          _TaskData(
-            asset: asset,
-            icon: Icons.event_busy_outlined,
-            title: asset.title,
-            message: '已逾期',
-            actionLabel: '已处理',
-            priority: 0,
-          ),
-        );
-      }
-      if (dueDate != null &&
-          !dueDate.isBefore(today) &&
-          dueDate.isBefore(now.add(const Duration(days: 7)))) {
-        final amount = asset.fields['amount']?.toString();
-        tasks.add(
-          _TaskData(
-            asset: asset,
-            icon: Icons.event_available,
-            title: asset.title,
-            message:
-                '${DateFormat('M月d日').format(dueDate)}前扣款'
-                '${amount == null ? '' : ' · $amount'}',
-            actionLabel: '已处理',
-            priority: 0,
-          ),
-        );
-      }
-    }
-    tasks.sort((a, b) => a.priority.compareTo(b.priority));
-    return tasks.take(3).toList();
   }
 }
 
@@ -1045,7 +981,9 @@ class _QuickChip extends StatelessWidget {
     selected: selected,
     onSelected: (_) => onTap(),
     showCheckmark: false,
-    side: BorderSide(color: selected ? context.skin.textPrimary : context.skin.outline),
+    side: BorderSide(
+      color: selected ? context.skin.textPrimary : context.skin.outline,
+    ),
     labelPadding: const EdgeInsets.symmetric(horizontal: 2),
   );
 }
@@ -1319,74 +1257,6 @@ class _SectionTitle extends StatelessWidget {
   );
 }
 
-class _TaskData {
-  const _TaskData({
-    required this.asset,
-    required this.icon,
-    required this.title,
-    required this.message,
-    required this.actionLabel,
-    this.priority = 0,
-  });
-
-  final Asset asset;
-  final IconData icon;
-  final String title;
-  final String message;
-  final String actionLabel;
-  final int priority;
-}
-
-class _GoodWatchtowerRow extends StatelessWidget {
-  const _GoodWatchtowerRow();
-
-  @override
-  Widget build(BuildContext context) => Container(
-    height: 56,
-    alignment: Alignment.centerLeft,
-    decoration: BoxDecoration(
-      border: Border(bottom: BorderSide(color: context.skin.outline)),
-    ),
-    child: Row(
-      children: [
-        Icon(Icons.verified_outlined, size: 20, color: context.skin.success),
-        SizedBox(width: 10),
-        Expanded(child: Text('保险库状态良好')),
-      ],
-    ),
-  );
-}
-
-class _HomeWatchtower extends StatelessWidget {
-  const _HomeWatchtower({
-    required this.tasks,
-    required this.onTask,
-    required this.onTaskDetail,
-  });
-
-  final List<_TaskData> tasks;
-  final ValueChanged<_TaskData> onTask;
-  final ValueChanged<_TaskData> onTaskDetail;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: context.skin.canvas,
-    child: Column(
-      children: [
-        if (tasks.isEmpty)
-          const _GoodWatchtowerRow()
-        else
-          for (final task in tasks)
-            _TaskCard(
-              task: task,
-              onView: () => onTaskDetail(task),
-              onAction: () => onTask(task),
-            ),
-      ],
-    ),
-  );
-}
-
 class _CollectionsPane extends StatelessWidget {
   const _CollectionsPane({
     required this.filter,
@@ -1523,74 +1393,6 @@ class _CollectionRow extends StatelessWidget {
   );
 }
 
-class _TaskCard extends StatelessWidget {
-  const _TaskCard({
-    required this.task,
-    required this.onView,
-    required this.onAction,
-  });
-
-  final _TaskData task;
-  final VoidCallback onView;
-  final VoidCallback onAction;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.zero,
-    child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        overlayColor: WidgetStatePropertyAll(
-          context.skin.surfaceAlt.withValues(alpha: 1),
-        ),
-        onTap: onView,
-        child: Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: context.skin.outline)),
-          ),
-          child: Row(
-            children: [
-              Icon(task.icon, color: context.skin.textSecondary, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      task.message,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w500),
-                    ),
-                    Text(
-                      task.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: context.skin.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              TextButton(
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  minimumSize: const Size(64, 44),
-                ),
-                onPressed: onAction,
-                child: Text(task.actionLabel),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
 class _AssetRow extends StatelessWidget {
   const _AssetRow({
     required this.asset,
@@ -1694,11 +1496,7 @@ class _AssetRow extends StatelessWidget {
                     ),
                   ),
                 ] else if (!selectionMode)
-                  Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: skin.textTertiary,
-                  ),
+                  Icon(Icons.chevron_right, size: 18, color: skin.textTertiary),
               ],
             ),
           ),

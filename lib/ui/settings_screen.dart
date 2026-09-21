@@ -28,29 +28,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _busy = false;
 
-  Future<void> _confirmLock() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('立即锁定'),
-        content: const Text('锁定后会丢弃内存中的密钥，需要主密码或生物识别重新解锁。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: context.skin.danger),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('锁定'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      widget.services.controller.lock();
-    }
-  }
+  // 一键锁定（DESIGN.md）：瞬间锁死，禁止任何二次确认弹窗。
+  void _lockNow() => widget.services.controller.lock();
 
   Future<void> _pickAutoLock() async {
     final store = widget.services.settingsStore;
@@ -113,8 +92,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         for (final attachment
             in await widget.services.repository.listAttachments(asset.id)) {
           attachments.add(attachment);
-          final bytes =
-              await widget.services.repository.attachmentBytes(attachment.id);
+          final bytes = await widget.services.repository.attachmentBytes(
+            attachment.id,
+          );
           if (bytes != null) {
             attachmentBytes[attachment.id] = bytes;
           }
@@ -159,9 +139,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('从备份恢复'),
-        content: const Text(
-          '将把备份中的资产、关联、备注与图片合并进当前数据（同 ID 覆盖）。确定继续吗？',
-        ),
+        content: const Text('将把备份中的资产、关联、备注与图片合并进当前数据（同 ID 覆盖）。确定继续吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -242,7 +220,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 foregroundColor: context.skin.danger,
                 side: BorderSide(color: context.skin.danger),
               ),
-              onPressed: _confirmLock,
+              onPressed: _lockNow,
               icon: const Icon(Icons.lock_outline),
               label: const Text('立即锁定'),
             ),

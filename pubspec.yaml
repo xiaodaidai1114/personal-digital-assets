@@ -52,8 +52,6 @@ dependencies:
   local_auth: ^2.3.0
   # 账单与续期到期提醒通知
   flutter_local_notifications: ^19.1.0
-  # Android 端 G6 图谱容器
-  webview_flutter: ^4.13.0
   # 加密备份导出分享
   share_plus: ^11.1.0
   # 备份文件选择导入
@@ -97,8 +95,6 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  assets:
-    - assets/graph/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
