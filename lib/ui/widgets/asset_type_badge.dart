@@ -45,5 +45,6 @@ IconData assetTypeIcon(AssetType type) => switch (type) {
   AssetType.item => Icons.inventory_2_outlined,
   AssetType.bill => Icons.receipt_long_outlined,
   AssetType.bankCard => Icons.credit_card,
+  AssetType.server => Icons.dns_outlined,
   AssetType.other => Icons.category_outlined,
 };

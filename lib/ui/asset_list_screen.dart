@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:getwidget/getwidget.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '../data/asset_repository.dart';
+import '../data/dump_parser.dart';
 import '../domain/asset.dart';
+import '../domain/asset_field_format.dart';
 import '../domain/asset_filter.dart';
 import '../domain/relation.dart';
 import '../theme/app_theme.dart';
@@ -466,6 +469,7 @@ class _AssetListScreenState extends State<AssetListScreen> {
     required int dueSoonCount,
   }) => Column(
     children: [
+      _Dropzone(onDump: _handleDump),
       _PaletteHeader(
         assetCount: _assets.length,
         dueSoonCount: dueSoonCount,
@@ -532,6 +536,51 @@ class _AssetListScreenState extends State<AssetListScreen> {
       assets: _assets,
       onSelect: (asset) => _openDetail(asset.id),
     );
+  }
+
+  /// 倾倒口（DESIGN.md）：粘贴 → 本地解析 → 草稿核对 → 封缄入库。
+  Future<void> _handleDump(String raw) async {
+    final draft = parseDump(raw);
+    if (draft == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('无法识别倾倒内容，可点 + 手动新增资产')));
+      return;
+    }
+    final confirmed = await showModalBottomSheet<DumpDraft>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _DumpDraftSheet(draft: draft),
+    );
+    if (confirmed == null || !mounted) {
+      return;
+    }
+    final title = confirmed.title.trim();
+    final secret = confirmed.secret;
+    try {
+      await widget.repository.saveAsset(
+        Asset(
+          id: const Uuid().v4(),
+          type: confirmed.type,
+          title: title.isEmpty ? '未命名资产' : title,
+          fields: confirmed.fields,
+          tags: confirmed.tags,
+          encryptedSecret: secret == null
+              ? null
+              : await widget.controller.encryptSecret(secret),
+        ),
+      );
+      await _reload();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('已封缄入库')));
+      }
+    } on Exception {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('入库失败，请重试')));
+      }
+    }
   }
 
   Widget _buildEmptyResult() {
@@ -661,6 +710,7 @@ String _typeHint(AssetType type) => switch (type) {
   AssetType.item => '归属 / 位置',
   AssetType.bill => '金额 / 日期 / 支付',
   AssetType.bankCard => '银行 / 后四位',
+  AssetType.server => '主机 / 端口 / 用户',
   AssetType.other => '自定义字段',
 };
 
@@ -869,6 +919,200 @@ class _CollectionRow extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// 全局倾倒口（DESIGN.md）：置顶输入框，粘贴任意凭据文本即解析入库。
+class _Dropzone extends StatefulWidget {
+  const _Dropzone({required this.onDump});
+
+  final ValueChanged<String> onDump;
+
+  @override
+  State<_Dropzone> createState() => _DropzoneState();
+}
+
+class _DropzoneState extends State<_Dropzone> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    _controller.clear();
+    widget.onDump(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = context.skin;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: TextField(
+        controller: _controller,
+        minLines: 1,
+        maxLines: 3,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _submit(),
+        style: TextStyle(color: skin.textPrimary),
+        decoration: InputDecoration(
+          hintText: '粘贴倾倒：SSH 指令 / .env / JSON 凭证',
+          prefixIcon: const Icon(Icons.bolt_outlined),
+          suffixIcon: ListenableBuilder(
+            listenable: _controller,
+            builder: (context, _) => IconButton(
+              tooltip: '封缄入库',
+              icon: Icon(
+                Icons.archive_outlined,
+                color: _controller.text.isEmpty ? skin.disabled : skin.primary,
+              ),
+              onPressed: _controller.text.isEmpty ? null : _submit,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 倾倒草稿核对 sheet：字段核对 + 标题可改，确认后封缄入库。
+class _DumpDraftSheet extends StatefulWidget {
+  const _DumpDraftSheet({required this.draft});
+
+  final DumpDraft draft;
+
+  @override
+  State<_DumpDraftSheet> createState() => _DumpDraftSheetState();
+}
+
+class _DumpDraftSheetState extends State<_DumpDraftSheet> {
+  late final TextEditingController _title;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = TextEditingController(text: widget.draft.title);
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    Navigator.of(context).pop(
+      DumpDraft(
+        type: widget.draft.type,
+        title: _title.text,
+        fields: widget.draft.fields,
+        tags: widget.draft.tags,
+        secret: widget.draft.secret,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = context.skin;
+    final draft = widget.draft;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                AssetTypeBadge(type: draft.type, size: 30),
+                const SizedBox(width: 10),
+                Text(
+                  '识别为「${draft.type.label}」',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _title,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: '标题',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            if (draft.fields.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ...[
+                for (final entry in draft.fields.entries)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 88,
+                          child: Text(
+                            AssetFieldFormat.label(entry.key),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: skin.textSecondary),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            AssetFieldFormat.value(entry.key, entry.value),
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ],
+            if (draft.secret != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.lock_outline, size: 16, color: skin.warning),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '已识别敏感内容，将加密封缄保存（不落普通字段）',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: skin.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: _confirm,
+                  icon: const Icon(Icons.archive_outlined, size: 18),
+                  label: const Text('封缄入库'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// 面板入口（DESIGN.md）：常驻搜索 pill，点击唤醒命令控制台。

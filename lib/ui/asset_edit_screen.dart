@@ -360,6 +360,17 @@ class _AssetEditScreenState extends State<AssetEditScreen> {
       ),
       _FieldTemplate('expiryDate', '有效期', Icons.event_outlined),
     ],
+    AssetType.server: [
+      _FieldTemplate('host', '主机', Icons.dns_outlined),
+      _FieldTemplate('port', '端口', Icons.numbers),
+      _FieldTemplate('user', '用户', Icons.person_outline),
+      _FieldTemplate(
+        'key',
+        '密钥文件',
+        Icons.vpn_key_outlined,
+        '仅保存路径或名称，私钥内容请写入敏感内容',
+      ),
+    ],
   };
 }
 

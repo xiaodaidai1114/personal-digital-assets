@@ -10,6 +10,7 @@ enum AssetType {
   item('物品'),
   bill('账单'),
   bankCard('银行卡'),
+  server('服务器'),
   other('其他');
 
   const AssetType(this.label);

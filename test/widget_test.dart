@@ -93,8 +93,12 @@ void main() {
     await tester.tap(find.text('检索资产、字段、标签…'));
     await tester.pumpAndSettle();
     final palette = find.byType(CommandPalette);
+    final paletteInput = find.descendant(
+      of: palette,
+      matching: find.byType(TextField),
+    );
     // 字段值命中：标题不含 Android，靠 os 字段检索（暗数据不出暗区）
-    await tester.enterText(find.byType(TextField), 'Android');
+    await tester.enterText(paletteInput, 'Android');
     await tester.pump();
     expect(
       find.descendant(of: palette, matching: find.text('安卓手机')),
@@ -105,14 +109,14 @@ void main() {
       findsNothing,
     );
     // 清空恢复全量
-    await tester.enterText(find.byType(TextField), '');
+    await tester.enterText(paletteInput, '');
     await tester.pump();
     expect(
       find.descendant(of: palette, matching: find.text('主邮箱')),
       findsOneWidget,
     );
     // 无匹配显示空态并可关闭
-    await tester.enterText(find.byType(TextField), 'zzz不存在');
+    await tester.enterText(paletteInput, 'zzz不存在');
     await tester.pump();
     expect(
       find.descendant(of: palette, matching: find.text('无匹配资产')),
@@ -121,6 +125,47 @@ void main() {
     await tester.tap(find.byTooltip('关闭面板'));
     await tester.pumpAndSettle();
     expect(find.byType(CommandPalette), findsNothing);
+  });
+
+  testWidgets('倾倒口粘贴 SSH 指令解析封缄入库并支持复制', (tester) async {
+    // flutter_test 不内置剪贴板通道 mock：setData/getData 会永久挂起，这里手动接住
+    var clipboardText = '';
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        switch (call.method) {
+          case 'Clipboard.setData':
+            clipboardText =
+                (call.arguments as Map?)?['text'] as String? ?? '';
+          case 'Clipboard.getData':
+            return <String, Object>{'text': clipboardText};
+        }
+        return null;
+      },
+    );
+    await unlockApp(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, '粘贴倾倒：SSH 指令 / .env / JSON 凭证'),
+      'ssh -p 2222 deploy@example.com',
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('封缄入库'));
+    await tester.pumpAndSettle();
+
+    // 草稿核对 sheet：识别为服务器
+    expect(find.textContaining('识别为「服务器」'), findsOneWidget);
+    await tester.tap(find.text('封缄入库'));
+    await tester.pump();
+    expect(find.text('已封缄入库'), findsOneWidget);
+    await tester.pumpAndSettle();
+
+    // 列表出现新资产行，详情提供复制 SSH 上下文动作
+    await tester.tap(find.text('deploy@example.com'));
+    await tester.pumpAndSettle();
+    expect(find.text('复制 SSH 指令'), findsOneWidget);
+    await tester.tap(find.text('复制 SSH 指令'));
+    await tester.pump();
+    expect(clipboardText, 'ssh -p 2222 deploy@example.com');
   });
 
   testWidgets('到期清单独立页显示提醒区与月视图', (tester) async {
@@ -297,7 +342,10 @@ void main() {
     await tester.tap(find.text('检索资产、字段、标签…'));
     await tester.pumpAndSettle();
     final palette = find.byType(CommandPalette);
-    await tester.enterText(find.byType(TextField), '批量处理');
+    await tester.enterText(
+      find.descendant(of: palette, matching: find.byType(TextField)),
+      '批量处理',
+    );
     await tester.pump();
     expect(
       find.descendant(of: palette, matching: find.text('AI 助手 API Key')),

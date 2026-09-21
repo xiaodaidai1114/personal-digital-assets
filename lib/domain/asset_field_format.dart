@@ -21,6 +21,10 @@ const Map<String, String> assetFieldLabels = {
   'paid': '已支付',
   'bank': '银行',
   'cardNumber': '卡号后四位',
+  'host': '主机',
+  'port': '端口',
+  'user': '用户',
+  'key': '密钥文件',
 };
 
 abstract final class AssetFieldFormat {

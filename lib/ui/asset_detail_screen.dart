@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/asset_repository.dart';
+import '../data/dump_parser.dart';
 import '../domain/asset.dart';
 import '../domain/asset_attachment.dart';
 import '../domain/asset_field_format.dart';
@@ -55,6 +56,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
   bool _loaded = false;
   String? _error;
   Timer? _autoHideTimer;
+  Timer? _clipboardTimer;
 
   @override
   void initState() {
@@ -65,6 +67,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
   @override
   void dispose() {
     _autoHideTimer?.cancel();
+    _clipboardTimer?.cancel();
     super.dispose();
   }
 
@@ -168,6 +171,53 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('已复制，请注意剪贴板安全')));
+    }
+  }
+
+  /// 上下文主动作（DESIGN.md）：解锁并复制，8 秒倒计时后自动清空剪贴板。
+  Future<void> _unlockAndCopy() async {
+    final encrypted = _asset?.encryptedSecret;
+    if (encrypted == null) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final plain = await widget.controller.decryptSecret(encrypted);
+      await Clipboard.setData(ClipboardData(text: plain));
+      _clipboardTimer?.cancel();
+      _clipboardTimer = Timer(const Duration(seconds: 8), () {
+        Clipboard.setData(const ClipboardData(text: ''));
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('已复制，8 秒后自动清空剪贴板'),
+            duration: Duration(seconds: 8),
+          ),
+        );
+      }
+    } on Exception {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('无法解密：保险库状态异常')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  /// 服务器上下文动作：按字段拼 SSH 指令并复制。
+  Future<void> _copySshCommand() async {
+    final asset = _asset;
+    if (asset == null) {
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: buildSshCommand(asset)));
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已复制 SSH 指令')));
     }
   }
 
@@ -496,6 +546,28 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
                 ),
               ),
             ),
+            // 上下文主动作：按类型出现（服务器=复制 SSH；带封缄=解锁并复制 8 秒清剪贴板）
+            if (asset.type == AssetType.server &&
+                (asset.fields['host']?.toString() ?? '').isNotEmpty) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _copySshCommand,
+                icon: const Icon(Icons.terminal, size: 18),
+                label: const Text('复制 SSH 指令'),
+              ),
+            ],
+            if (asset.encryptedSecret != null &&
+                (asset.type == AssetType.apiKey ||
+                    asset.type == AssetType.password ||
+                    asset.type == AssetType.email ||
+                    asset.type == AssetType.server)) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _unlockAndCopy,
+                icon: const Icon(Icons.content_copy, size: 18),
+                label: const Text('解锁并复制（8 秒清空）'),
+              ),
+            ],
             if (asset.fields.isNotEmpty) ...[
               const SizedBox(height: 20),
               Text('字段', style: Theme.of(context).textTheme.titleLarge),
