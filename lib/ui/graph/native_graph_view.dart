@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/asset.dart';
 import '../../domain/relation.dart';
-import '../../theme/app_theme.dart';
+import 'graph_palette.dart';
 import '../widgets/asset_type_badge.dart';
 
 /// 原生夜纸图谱：力导向物理布局 + 可拖拽节点 + 细线邻域。
@@ -242,11 +242,11 @@ class _NativeGraphViewState extends State<NativeGraphView>
                   overflow: TextOverflow.ellipsis,
                   style:
                       const TextStyle(
-                        color: AppColors.graphNode,
+                        color: kGraphNode,
                         fontSize: 11,
                         height: 1.2,
                       ).copyWith(
-                        color: AppColors.graphNode.withValues(
+                        color: kGraphNode.withValues(
                           alpha: dimmed ? .18 : 1,
                         ),
                       ),
@@ -282,13 +282,13 @@ class _NodeBadge extends StatelessWidget {
             ? BorderRadius.circular(4)
             : null,
         border: Border.all(
-          color: AppColors.graphNode,
+          color: kGraphNode,
           width: selected ? 2 : 1.5,
         ),
       ),
       child: Icon(
         assetTypeIcon(asset.type),
-        color: AppColors.graphNode,
+        color: kGraphNode,
         size: 15,
       ),
     );
@@ -346,7 +346,7 @@ class _NebulaPainter extends CustomPainter {
           focusIds.contains(relation.fromAssetId) ||
           focusIds.contains(relation.toAssetId);
       final isActive = isSelected || inFocus;
-      final color = AppColors.graphNode.withValues(alpha: isActive ? .9 : .18);
+      final color = kGraphNode.withValues(alpha: isActive ? .9 : .18);
       final paint = Paint()
         ..color = color
         ..strokeWidth = isActive ? 1.5 : 1

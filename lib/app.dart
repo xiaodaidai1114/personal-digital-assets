@@ -52,7 +52,7 @@ class PersonalDigitalAssetsApp extends StatefulWidget {
 
 class _PersonalDigitalAssetsAppState extends State<PersonalDigitalAssetsApp> {
   late final Future<AppServices> _servicesFuture;
-  AppAppearance _appearance = AppAppearance.morning;
+  AppThemeMode _themeMode = AppThemeMode.light;
 
   @override
   void initState() {
@@ -67,7 +67,7 @@ class _PersonalDigitalAssetsAppState extends State<PersonalDigitalAssetsApp> {
       if (widget.repository == null) {
         await seedDemoData(repository);
       }
-      return _loadAppearance(
+      return _loadThemeMode(
         AppServices(
           controller: injected,
           repository: repository,
@@ -95,56 +95,50 @@ class _PersonalDigitalAssetsAppState extends State<PersonalDigitalAssetsApp> {
       updateChecker: GitHubUpdateChecker(currentVersion: AppVersion.current),
     );
     await services.syncReminders();
-    return _loadAppearance(services);
+    return _loadThemeMode(services);
   }
 
-  Future<AppServices> _loadAppearance(AppServices services) async {
-    final appearance = await services.settingsStore.appearance();
+  Future<AppServices> _loadThemeMode(AppServices services) async {
+    final mode = await services.settingsStore.themeMode();
     if (!mounted) {
       return services;
     }
-    setState(() => _appearance = appearance);
+    setState(() => _themeMode = mode);
     return services;
   }
 
-  void _setAppearance(AppAppearance appearance) {
-    if (_appearance != appearance) {
-      setState(() => _appearance = appearance);
+  void _setThemeMode(AppThemeMode mode) {
+    if (_themeMode != mode) {
+      setState(() => _themeMode = mode);
     }
   }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: '个人数字资产',
-    theme: AppTheme.day(),
-    themeMode: ThemeMode.light,
+    theme: AppTheme.light(),
+    darkTheme: AppTheme.dark(),
+    themeMode: _themeMode.flutter,
     builder: (context, child) {
+      final skin = context.skin;
       final size = MediaQuery.sizeOf(context);
-      final content = child == null
-          ? null
-          : _appearance == AppAppearance.evening
-          ? ColorFiltered(
-              colorFilter: AppTheme.eveningColorFilter,
-              child: child,
-            )
-          : child;
-      if (!kIsWeb || size.width < 1024 || content == null) {
-        return content ?? const SizedBox.shrink();
+      if (!kIsWeb || size.width < 1024 || child == null) {
+        return child ?? const SizedBox.shrink();
       }
       return ColoredBox(
-        color: AppColors.paper,
+        color: skin.canvas,
         child: Center(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: AppColors.paper,
-              border: Border.all(color: AppColors.rule),
+              color: skin.canvas,
+              border: Border.all(color: skin.outline),
             ),
             child: SizedBox(
               width: 430,
               child: MediaQuery(
                 data: MediaQuery.of(context)
                     .copyWith(size: Size(430, size.height)),
-                child: content,
+                child: child,
               ),
             ),
           ),
@@ -160,7 +154,7 @@ class _PersonalDigitalAssetsAppState extends State<PersonalDigitalAssetsApp> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        return AppRoot(services: services, onAppearanceChanged: _setAppearance);
+        return AppRoot(services: services, onThemeModeChanged: _setThemeMode);
       },
     ),
   );
@@ -171,11 +165,11 @@ class AppRoot extends StatefulWidget {
   const AppRoot({
     super.key,
     required this.services,
-    required this.onAppearanceChanged,
+    required this.onThemeModeChanged,
   });
 
   final AppServices services;
-  final ValueChanged<AppAppearance> onAppearanceChanged;
+  final ValueChanged<AppThemeMode> onThemeModeChanged;
 
   @override
   State<AppRoot> createState() => _AppRootState();
@@ -214,31 +208,36 @@ class _AppRootState extends State<AppRoot> {
   }
 
   @override
-  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
-    // 日间系统栏兜底（DESIGN.md 纸底墨图标）：解锁页等没有 AppBar 的纸面
-    // 也能确定图标方向，并保证离开星图夜色系统栏后恢复纸色；
-    // 星图页内部更近的 AnnotatedRegion 会覆盖本值。
-    value: SystemUiOverlayStyle.dark.copyWith(
-      statusBarColor: AppColors.paper,
-      systemNavigationBarColor: AppColors.paper,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ),
-    child: Stack(
-      children: [
-        _controller.isUnlocked
-            ? MainShell(
+  Widget build(BuildContext context) {
+    final skin = context.skin;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // 系统栏跟随亮暗主题：解锁页等无 AppBar 的画面也能确定图标方向；
+      // 星图页内部更近的 AnnotatedRegion 会覆盖本值。
+      value: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          .copyWith(
+            statusBarColor: skin.canvas,
+            systemNavigationBarColor: skin.canvas,
+            systemNavigationBarIconBrightness:
+                isDark ? Brightness.light : Brightness.dark,
+          ),
+      child: Stack(
+        children: [
+          _controller.isUnlocked
+              ? MainShell(
                 services: widget.services,
                 autoLock: _autoLock,
-                onAppearanceChanged: widget.onAppearanceChanged,
+                onThemeModeChanged: widget.onThemeModeChanged,
               )
-            : UnlockScreen(controller: _controller),
-        if (_openingCurtain)
-          _OpeningCurtain(
-            onFinished: () => setState(() => _openingCurtain = false),
-          ),
-      ],
-    ),
-  );
+              : UnlockScreen(controller: _controller),
+          if (_openingCurtain)
+            _OpeningCurtain(
+              onFinished: () => setState(() => _openingCurtain = false),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 /// 解锁转场：纸面淡出，主界面轻微上移进入。
@@ -278,6 +277,7 @@ class _OpeningCurtainState extends State<_OpeningCurtain>
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final fade = CurvedAnimation(
       parent: _controller,
       curve: const Interval(0, .72, curve: Curves.easeOut),
@@ -294,7 +294,7 @@ class _OpeningCurtainState extends State<_OpeningCurtain>
         ),
         child: Container(
           height: MediaQuery.sizeOf(context).height,
-          color: AppColors.paper,
+          color: skin.canvas,
         ),
       ),
     );
@@ -313,12 +313,12 @@ class MainShell extends StatefulWidget {
     super.key,
     required this.services,
     required this.autoLock,
-    required this.onAppearanceChanged,
+    required this.onThemeModeChanged,
   });
 
   final AppServices services;
   final AutoLockController autoLock;
-  final ValueChanged<AppAppearance> onAppearanceChanged;
+  final ValueChanged<AppThemeMode> onThemeModeChanged;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -337,6 +337,7 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final services = widget.services;
     final pages = [
       AssetListScreen(
@@ -351,7 +352,7 @@ class _MainShellState extends State<MainShell> {
       ),
       SettingsScreen(
         services: services,
-        onAppearanceChanged: widget.onAppearanceChanged,
+        onThemeModeChanged: widget.onThemeModeChanged,
       ),
     ];
     final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
@@ -382,7 +383,7 @@ class _MainShellState extends State<MainShell> {
                     onSelected: (index) =>
                         setState(() => _selectedIndex = index),
                   ),
-                  Container(height: 1, color: AppColors.rule),
+                  Container(height: 1, color: skin.outline),
                   Expanded(
                     child: Column(
                       children: [
@@ -427,8 +428,8 @@ class _MainShellState extends State<MainShell> {
                 selectedIndex: _selectedIndex,
                 onDestinationSelected: (index) =>
                     setState(() => _selectedIndex = index),
-                backgroundColor: AppColors.sheet,
-                indicatorColor: AppColors.paper2,
+                backgroundColor: skin.surface,
+                indicatorColor: skin.surfaceAlt,
                 surfaceTintColor: Colors.transparent,
                 shadowColor: Colors.transparent,
                 elevation: 0,
@@ -475,11 +476,12 @@ class _UpdateBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     return Material(
-      color: AppColors.sheet,
+      color: skin.surface,
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.rule)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: skin.outline)),
         ),
         child: SafeArea(
           bottom: false,
@@ -539,10 +541,11 @@ class _DesktopNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const foreground = AppColors.ink;
-    const secondary = AppColors.ink2;
+    final skin = context.skin;
+    final foreground = skin.textPrimary;
+    final secondary = skin.textSecondary;
     return Material(
-      color: AppColors.sheet,
+      color: skin.surface,
       child: SafeArea(
         bottom: false,
         child: Container(
@@ -572,7 +575,7 @@ class _DesktopNavigation extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
                         color: selectedIndex == item.$1
-                            ? AppColors.paper2
+                            ? skin.surfaceAlt
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                       ),

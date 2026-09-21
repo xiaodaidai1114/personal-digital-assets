@@ -1,273 +1,314 @@
 import 'package:flutter/material.dart';
+import 'package:getwidget/getwidget.dart';
 
-import '../domain/asset.dart';
+/// 皮肤色对：以 GF（getwidget）默认色板为基底派生的亮/暗两套取值。
+///
+/// GF 组件不读 ThemeData，暗色场景必须显式传色；
+/// Material 残件同样统一走 `context.skin.xxx`，亮暗双主题一处取色。
+@immutable
+class AppSkin extends ThemeExtension<AppSkin> {
+  const AppSkin({
+    required this.canvas,
+    required this.surface,
+    required this.surfaceAlt,
+    required this.outline,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.textTertiary,
+    required this.primary,
+    required this.onPrimary,
+    required this.danger,
+    required this.success,
+    required this.warning,
+    required this.info,
+    required this.disabled,
+  });
 
-class AppColors {
-  const AppColors._();
+  /// 页面画布。
+  final Color canvas;
 
-  static const paper = Color(0xFFFFFFFF);
-  static const paper2 = Color(0xFFF4F1EC);
-  static const sheet = Color(0xFFFFFFFF);
-  static const ink = Color(0xFF1C1B17);
-  static const ink2 = Color(0xFF57544C);
-  static const ink3 = Color(0xFF6E6A60);
-  static const rule = Color(0xFFE3E0D8);
-  static const mark = Color(0xFF8A4A2B);
-  static const ok = Color(0xFF3D5A45);
+  /// 卡面与弹层。
+  final Color surface;
 
-  static const dayBackground = paper;
-  static const daySurface = sheet;
-  static const dayTextPrimary = ink;
-  static const dayTextSecondary = ink2;
-  static const dayOutline = rule;
-  static const primary = ink;
-  static const link = mark;
-  static const danger = Color(0xFF8B2E2E);
-  static const warning = mark;
-  static const success = ok;
+  /// 输入填充与选中底。
+  final Color surfaceAlt;
 
-  static const nightBackground = Color(0xFF1A1915);
-  static const nightSurface = Color(0xFF24221C);
-  static const nightTextPrimary = Color(0xFFEDE8DC);
-  static const nightTextSecondary = Color(0xFFA39B8C);
-  static const graphNode = Color(0xFFEDE8DC);
+  /// 描边与分隔线。
+  final Color outline;
 
-  static Color typeDeep(AssetType type) => ink;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color textTertiary;
 
-  static Color typeLight(AssetType type) => graphNode;
+  /// GF PRIMARY（3880FF）主操作色。
+  final Color primary;
+  final Color onPrimary;
+
+  /// GF DANGER。
+  final Color danger;
+
+  /// 亮色用 GF SUCCESS swatch 700 保证白底对比度，暗色用 GF SUCCESS 原值。
+  final Color success;
+  final Color warning;
+  final Color info;
+  final Color disabled;
+
+  /// GF 默认亮色：F4F5F8 画布 + 白卡面 + 3880FF 主色。
+  static const AppSkin light = AppSkin(
+    canvas: GFColors.BACKGROUND,
+    surface: GFColors.WHITE,
+    surfaceAlt: GFColors.BACKGROUND,
+    outline: GFColors.LIGHT,
+    textPrimary: GFColors.DARK,
+    // 略深于 GF MUTED（757575）：F4F5F8 画布上才能守住 4.5:1 对比红线
+    textSecondary: Color(0xFF616569),
+    textTertiary: GFColors.NEUTRAL,
+    primary: GFColors.PRIMARY,
+    onPrimary: GFColors.WHITE,
+    danger: GFColors.DANGER,
+    success: Color(0xFF1A8257), // GF SUCCESS_SWATCH[700]
+    warning: GFColors.WARNING,
+    info: GFColors.INFO,
+    disabled: GFColors.DISABLED,
+  );
+
+  /// 暗色：GF DARK（222428）卡面，画布再压暗一档，主色沿用 GF PRIMARY。
+  static const AppSkin dark = AppSkin(
+    canvas: Color(0xFF17181D),
+    surface: GFColors.DARK,
+    surfaceAlt: Color(0xFF2B2D34),
+    outline: Color(0xFF3A3D45),
+    textPrimary: Color(0xFFF4F5F8),
+    textSecondary: Color(0xFFB3B8C4),
+    textTertiary: GFColors.NEUTRAL,
+    primary: GFColors.PRIMARY,
+    onPrimary: GFColors.WHITE,
+    danger: GFColors.DANGER,
+    success: GFColors.SUCCESS,
+    warning: GFColors.WARNING,
+    info: GFColors.INFO,
+    disabled: Color(0xFF6B6E76),
+  );
+
+  @override
+  AppSkin copyWith({
+    Color? canvas,
+    Color? surface,
+    Color? surfaceAlt,
+    Color? outline,
+    Color? textPrimary,
+    Color? textSecondary,
+    Color? textTertiary,
+    Color? primary,
+    Color? onPrimary,
+    Color? danger,
+    Color? success,
+    Color? warning,
+    Color? info,
+    Color? disabled,
+  }) => AppSkin(
+    canvas: canvas ?? this.canvas,
+    surface: surface ?? this.surface,
+    surfaceAlt: surfaceAlt ?? this.surfaceAlt,
+    outline: outline ?? this.outline,
+    textPrimary: textPrimary ?? this.textPrimary,
+    textSecondary: textSecondary ?? this.textSecondary,
+    textTertiary: textTertiary ?? this.textTertiary,
+    primary: primary ?? this.primary,
+    onPrimary: onPrimary ?? this.onPrimary,
+    danger: danger ?? this.danger,
+    success: success ?? this.success,
+    warning: warning ?? this.warning,
+    info: info ?? this.info,
+    disabled: disabled ?? this.disabled,
+  );
+
+  @override
+  AppSkin lerp(AppSkin? other, double t) {
+    if (other is! AppSkin) {
+      return this;
+    }
+    return AppSkin(
+      canvas: Color.lerp(canvas, other.canvas, t)!,
+      surface: Color.lerp(surface, other.surface, t)!,
+      surfaceAlt: Color.lerp(surfaceAlt, other.surfaceAlt, t)!,
+      outline: Color.lerp(outline, other.outline, t)!,
+      textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
+      textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
+      textTertiary: Color.lerp(textTertiary, other.textTertiary, t)!,
+      primary: Color.lerp(primary, other.primary, t)!,
+      onPrimary: Color.lerp(onPrimary, other.onPrimary, t)!,
+      danger: Color.lerp(danger, other.danger, t)!,
+      success: Color.lerp(success, other.success, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      info: Color.lerp(info, other.info, t)!,
+      disabled: Color.lerp(disabled, other.disabled, t)!,
+    );
+  }
+}
+
+extension AppSkinContext on BuildContext {
+  /// 当前亮暗主题对应的皮肤取值（AppTheme 已随主题注册，测试需自备）。
+  AppSkin get skin => Theme.of(this).extension<AppSkin>()!;
 }
 
 class AppTheme {
   const AppTheme._();
 
-  static const eveningMatrix = <double>[
-    .98,
-    0,
-    0,
-    0,
-    0,
-    0,
-    .955,
-    0,
-    0,
-    0,
-    0,
-    0,
-    .925,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-  ];
+  static ThemeData light() => _build(Brightness.light, AppSkin.light);
 
-  static const eveningColorFilter = ColorFilter.matrix(eveningMatrix);
+  static ThemeData dark() => _build(Brightness.dark, AppSkin.dark);
 
-  static ThemeData day() {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.ink,
-      primary: AppColors.ink,
-      onPrimary: AppColors.sheet,
-      surface: AppColors.sheet,
-      onSurface: AppColors.ink,
-      onSurfaceVariant: AppColors.ink2,
-      outline: AppColors.rule,
-      outlineVariant: AppColors.rule,
-      secondaryContainer: AppColors.paper2,
-      onSecondaryContainer: AppColors.ink,
-      error: AppColors.danger,
+  static ThemeData _build(Brightness brightness, AppSkin skin) {
+    final colorScheme = ColorScheme(
+      brightness: brightness,
+      primary: skin.primary,
+      onPrimary: skin.onPrimary,
+      secondary: GFColors.SECONDARY,
+      onSecondary: GFColors.WHITE,
+      error: skin.danger,
+      onError: GFColors.WHITE,
+      surface: skin.surface,
+      onSurface: skin.textPrimary,
+      onSurfaceVariant: skin.textSecondary,
+      outline: skin.outline,
+      outlineVariant: skin.outline,
+      surfaceContainerHighest: skin.surfaceAlt,
     );
     final base = ThemeData(useMaterial3: true, colorScheme: colorScheme);
     return base.copyWith(
-      scaffoldBackgroundColor: AppColors.paper,
-      textTheme: _textTheme(base.textTheme, AppColors.ink),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.paper,
-        foregroundColor: AppColors.ink,
+      scaffoldBackgroundColor: skin.canvas,
+      textTheme: _textTheme(base.textTheme, skin.textPrimary),
+      extensions: <ThemeExtension<dynamic>>[skin],
+      appBarTheme: AppBarTheme(
+        backgroundColor: skin.canvas,
+        foregroundColor: skin.textPrimary,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          color: AppColors.ink,
+          color: skin.textPrimary,
           fontSize: 22,
           height: 28 / 22,
           fontWeight: FontWeight.w600,
         ),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.sheet,
+        color: skin.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: AppColors.rule),
+          side: BorderSide(color: skin.outline),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.paper2,
-        labelStyle: const TextStyle(color: AppColors.ink2),
-        floatingLabelStyle: const TextStyle(color: AppColors.ink),
-        hintStyle: const TextStyle(color: AppColors.ink3),
-        helperStyle: const TextStyle(color: AppColors.ink2),
-        prefixIconColor: AppColors.ink2,
-        suffixIconColor: AppColors.ink2,
-        border: _inputBorder(AppColors.rule),
-        enabledBorder: _inputBorder(AppColors.rule),
-        focusedBorder: _inputBorder(AppColors.mark, width: 2),
-        errorBorder: _inputBorder(AppColors.danger),
-        focusedErrorBorder: _inputBorder(AppColors.danger, width: 2),
+        fillColor: skin.surfaceAlt,
+        labelStyle: TextStyle(color: skin.textSecondary),
+        floatingLabelStyle: TextStyle(color: skin.textPrimary),
+        hintStyle: TextStyle(color: skin.textTertiary),
+        helperStyle: TextStyle(color: skin.textSecondary),
+        prefixIconColor: skin.textSecondary,
+        suffixIconColor: skin.textSecondary,
+        border: _inputBorder(skin.outline),
+        enabledBorder: _inputBorder(skin.outline),
+        focusedBorder: _inputBorder(skin.primary, width: 2),
+        errorBorder: _inputBorder(skin.danger),
+        focusedErrorBorder: _inputBorder(skin.danger, width: 2),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
           vertical: 12,
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style:
-            FilledButton.styleFrom(
-              minimumSize: const Size(64, 48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              textStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ).copyWith(
-              backgroundColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.disabled)
-                    ? AppColors.paper2
-                    : AppColors.ink,
-              ),
-              foregroundColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.disabled)
-                    ? AppColors.ink2
-                    : AppColors.sheet,
-              ),
-            ),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(64, 48),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ).copyWith(
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.disabled)
+                ? skin.surfaceAlt
+                : skin.primary,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.disabled)
+                ? skin.disabled
+                : skin.onPrimary,
+          ),
+        ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style:
-            OutlinedButton.styleFrom(
-              minimumSize: const Size(64, 48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              textStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ).copyWith(
-              foregroundColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.disabled)
-                    ? AppColors.ink2
-                    : AppColors.ink,
-              ),
-            ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(64, 48),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ).copyWith(
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.disabled)
+                ? skin.disabled
+                : skin.primary,
+          ),
+        ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style:
-            TextButton.styleFrom(
-              textStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ).copyWith(
-              foregroundColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.disabled)
-                    ? AppColors.ink2
-                    : AppColors.mark,
-              ),
-            ),
+        style: TextButton.styleFrom(
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ).copyWith(
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.disabled)
+                ? skin.disabled
+                : skin.primary,
+          ),
+        ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: AppColors.sheet,
+        backgroundColor: skin.surface,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: AppColors.paper2,
+        indicatorColor: skin.surfaceAlt,
         elevation: 0,
         height: 64,
-        labelTextStyle: const WidgetStatePropertyAll(
-          TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: AppColors.ink2,
-          ),
+        labelTextStyle: WidgetStatePropertyAll(
+          TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: skin.textSecondary),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: Colors.transparent,
-        selectedColor: AppColors.paper2,
-        checkmarkColor: AppColors.ink,
-        labelStyle: TextStyle(color: AppColors.ink, fontSize: 12),
-        side: const BorderSide(color: AppColors.rule),
+        selectedColor: skin.surfaceAlt,
+        checkmarkColor: skin.textPrimary,
+        labelStyle: TextStyle(color: skin.textPrimary, fontSize: 12),
+        side: BorderSide(color: skin.outline),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         showCheckmark: false,
       ),
-      dividerTheme: const DividerThemeData(color: AppColors.rule, thickness: 1),
-      textSelectionTheme: const TextSelectionThemeData(
-        cursorColor: AppColors.ink,
-        selectionColor: AppColors.paper2,
-        selectionHandleColor: AppColors.ink,
+      dividerTheme: DividerThemeData(color: skin.outline, thickness: 1),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: skin.primary,
+        selectionColor: skin.surfaceAlt,
+        selectionHandleColor: skin.primary,
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: AppColors.sheet,
+        backgroundColor: skin.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: AppColors.sheet,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: skin.surface,
+        dragHandleColor: skin.textSecondary,
         elevation: 0,
-        modalBackgroundColor: AppColors.sheet,
-        shape: RoundedRectangleBorder(
+        modalBackgroundColor: skin.surface,
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
         ),
       ),
-      snackBarTheme: const SnackBarThemeData(
-        backgroundColor: AppColors.ink,
-        contentTextStyle: TextStyle(color: AppColors.sheet),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: skin.textPrimary,
+        contentTextStyle: TextStyle(color: skin.surface),
         behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  static ThemeData night() {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.nightTextPrimary,
-      brightness: Brightness.dark,
-      primary: AppColors.nightTextPrimary,
-      surface: AppColors.nightSurface,
-      onSurface: AppColors.nightTextPrimary,
-      error: const Color(0xFFFFB4B4),
-    );
-    final base = ThemeData(useMaterial3: true, colorScheme: colorScheme);
-    return base.copyWith(
-      scaffoldBackgroundColor: AppColors.nightBackground,
-      textTheme: _textTheme(base.textTheme, AppColors.nightTextPrimary),
-      cardTheme: CardThemeData(
-        color: AppColors.nightSurface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(
-            color: AppColors.nightTextPrimary.withValues(alpha: .12),
-          ),
-        ),
-      ),
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: AppColors.nightSurface,
-        dragHandleColor: AppColors.nightTextSecondary,
-        elevation: 0,
-        modalBackgroundColor: AppColors.nightSurface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-        ),
       ),
     );
   }

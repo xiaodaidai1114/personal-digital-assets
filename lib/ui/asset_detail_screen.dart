@@ -175,6 +175,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
   }
 
   Future<void> _delete() async {
+    final skin = context.skin;
     final asset = _asset;
     if (asset == null) {
       return;
@@ -190,7 +191,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            style: FilledButton.styleFrom(backgroundColor: skin.danger),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('删除'),
           ),
@@ -248,7 +249,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            style: FilledButton.styleFrom(backgroundColor: context.skin.danger),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('移除'),
           ),
@@ -297,7 +298,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            style: FilledButton.styleFrom(backgroundColor: context.skin.danger),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('删除'),
           ),
@@ -353,7 +354,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            style: FilledButton.styleFrom(backgroundColor: context.skin.danger),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('删除'),
           ),
@@ -389,6 +390,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final asset = _asset;
     if (!_loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -477,8 +479,8 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
                                   color:
                                       Theme.of(context).brightness ==
                                           Brightness.dark
-                                      ? AppColors.nightTextSecondary
-                                      : AppColors.dayTextSecondary,
+                                      ? skin.textSecondary
+                                      : skin.textSecondary,
                                 ),
                           ),
                           if (asset.tags.isNotEmpty) ...[
@@ -494,16 +496,16 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: AppColors.paper2,
+                                      color: skin.surfaceAlt,
                                       borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: AppColors.rule),
+                                      border: Border.all(color: skin.outline),
                                     ),
                                     child: Text(
                                       tag,
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall
-                                          ?.copyWith(color: AppColors.ink2),
+                                          ?.copyWith(color: skin.textSecondary),
                                     ),
                                   ),
                               ],
@@ -532,8 +534,8 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
                                 color:
                                     Theme.of(context).brightness ==
                                         Brightness.dark
-                                    ? AppColors.nightTextSecondary
-                                    : AppColors.dayTextSecondary,
+                                    ? skin.textSecondary
+                                    : skin.textSecondary,
                               ),
                         ),
                         subtitle: Text(
@@ -679,15 +681,16 @@ class _SealedSecretCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final isOpen = revealed != null;
     return CustomPaint(
-      foregroundPainter: const DashedBorder(color: AppColors.ink3),
+      foregroundPainter: DashedBorder(color: skin.textTertiary),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.sheet,
+          color: skin.surface,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -727,7 +730,7 @@ class _SealedSecretCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         error!,
-                        style: const TextStyle(color: AppColors.danger),
+                        style: TextStyle(color: skin.danger),
                       ),
                     ),
                     TextButton(onPressed: onReveal, child: const Text('重试')),
@@ -804,6 +807,7 @@ class _NotesCardState extends State<_NotesCard> {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -887,7 +891,7 @@ class _NotesCardState extends State<_NotesCard> {
                     leading: Text(
                       DateFormat('MM-dd HH:mm').format(note.createdAt),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.ink2,
+                        color: skin.textSecondary,
                       ),
                     ),
                     title: Text(note.content),
@@ -1028,6 +1032,7 @@ class _AttachmentTileState extends State<_AttachmentTile> {
       child: FutureBuilder<Uint8List?>(
         future: _bytesFuture,
         builder: (context, snapshot) {
+          final skin = context.skin;
           final bytes = snapshot.data;
           return GestureDetector(
             // 字节未就绪时点按不进查看器，避免打开空白页
@@ -1039,8 +1044,8 @@ class _AttachmentTileState extends State<_AttachmentTile> {
                 width: 96,
                 height: 96,
                 child: bytes == null
-                    ? const ColoredBox(
-                        color: AppColors.paper2,
+                    ? ColoredBox(
+                        color: skin.surfaceAlt,
                         child: Center(
                           child: SizedBox(
                             width: 20,
@@ -1115,7 +1120,7 @@ class _LocalGraphCard extends StatelessWidget {
       child: Stack(
         children: [
           Container(
-            color: AppColors.nightBackground,
+            color: context.skin.canvas,
             child: buildGraphView(
               assets: assets,
               relations: relations,
@@ -1133,7 +1138,7 @@ class _LocalGraphCard extends StatelessWidget {
                   child: Text(
                     '一跳关系图',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: AppColors.nightTextPrimary,
+                      color: context.skin.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1141,7 +1146,7 @@ class _LocalGraphCard extends StatelessWidget {
                 if (onOpenGraph != null)
                   TextButton.icon(
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.nightTextPrimary,
+                      foregroundColor: context.skin.textPrimary,
                       visualDensity: VisualDensity.compact,
                     ),
                     onPressed: onOpenGraph,

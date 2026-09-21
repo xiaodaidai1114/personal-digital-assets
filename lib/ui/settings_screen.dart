@@ -15,11 +15,11 @@ class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.services,
-    required this.onAppearanceChanged,
+    required this.onThemeModeChanged,
   });
 
   final AppServices services;
-  final ValueChanged<AppAppearance> onAppearanceChanged;
+  final ValueChanged<AppThemeMode> onThemeModeChanged;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -40,7 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            style: FilledButton.styleFrom(backgroundColor: context.skin.danger),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('锁定'),
           ),
@@ -230,7 +230,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Card(
           child: _AppearanceTile(
             services: widget.services,
-            onAppearanceChanged: widget.onAppearanceChanged,
+            onThemeModeChanged: widget.onThemeModeChanged,
           ),
         ),
         const _SectionTitle('安全'),
@@ -239,8 +239,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: const EdgeInsets.all(16),
             child: OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.danger,
-                side: const BorderSide(color: AppColors.danger),
+                foregroundColor: context.skin.danger,
+                side: BorderSide(color: context.skin.danger),
               ),
               onPressed: _confirmLock,
               icon: const Icon(Icons.lock_outline),
@@ -329,41 +329,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
 class _AppearanceTile extends StatefulWidget {
   const _AppearanceTile({
     required this.services,
-    required this.onAppearanceChanged,
+    required this.onThemeModeChanged,
   });
 
   final AppServices services;
-  final ValueChanged<AppAppearance> onAppearanceChanged;
+  final ValueChanged<AppThemeMode> onThemeModeChanged;
 
   @override
   State<_AppearanceTile> createState() => _AppearanceTileState();
 }
 
 class _AppearanceTileState extends State<_AppearanceTile> {
-  late Future<AppAppearance> _appearance;
+  late Future<AppThemeMode> _themeMode;
 
   @override
   void initState() {
     super.initState();
-    _appearance = widget.services.settingsStore.appearance();
+    _themeMode = widget.services.settingsStore.themeMode();
   }
 
-  Future<void> _select(Set<AppAppearance> selection) async {
-    final appearance = selection.first;
-    await widget.services.settingsStore.setAppearance(appearance);
-    widget.onAppearanceChanged(appearance);
+  Future<void> _select(Set<AppThemeMode> selection) async {
+    final mode = selection.first;
+    await widget.services.settingsStore.setThemeMode(mode);
+    widget.onThemeModeChanged(mode);
     if (mounted) {
       setState(() {
-        _appearance = Future.value(appearance);
+        _themeMode = Future.value(mode);
       });
     }
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<AppAppearance>(
-    future: _appearance,
+  Widget build(BuildContext context) => FutureBuilder<AppThemeMode>(
+    future: _themeMode,
     builder: (context, snapshot) {
-      final appearance = snapshot.data ?? AppAppearance.morning;
+      final mode = snapshot.data ?? AppThemeMode.light;
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         child: Column(
@@ -371,19 +371,18 @@ class _AppearanceTileState extends State<_AppearanceTile> {
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.wb_sunny_outlined),
+              leading: const Icon(Icons.contrast),
               title: const Text('界面模式'),
-              subtitle: const Text('早晨和晚上都使用白底黑字'),
+              subtitle: const Text('原生亮暗双主题，跟随系统时自动切换'),
             ),
-            SegmentedButton<AppAppearance>(
+            SegmentedButton<AppThemeMode>(
               segments: const [
-                ButtonSegment(value: AppAppearance.morning, label: Text('早晨')),
-                ButtonSegment(value: AppAppearance.evening, label: Text('晚上')),
+                ButtonSegment(value: AppThemeMode.light, label: Text('亮色')),
+                ButtonSegment(value: AppThemeMode.dark, label: Text('暗色')),
+                ButtonSegment(value: AppThemeMode.system, label: Text('跟随系统')),
               ],
-              selected: {appearance},
-              onSelectionChanged: (selection) {
-                _select(selection);
-              },
+              selected: {mode},
+              onSelectionChanged: _select,
             ),
           ],
         ),

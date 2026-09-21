@@ -252,7 +252,7 @@ class _AssetListScreenState extends State<AssetListScreen> {
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            style: FilledButton.styleFrom(backgroundColor: context.skin.danger),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('删除'),
           ),
@@ -292,6 +292,7 @@ class _AssetListScreenState extends State<AssetListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final counts = _relationCounts;
     final filtered = _filter.apply(_assets, _relations);
     final pinned = filtered.where((asset) => asset.isPinned).toList();
@@ -349,7 +350,7 @@ class _AssetListScreenState extends State<AssetListScreen> {
                 child: Text(
                   '${_assets.length}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.dayTextSecondary,
+                    color: skin.textSecondary,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
@@ -360,8 +361,8 @@ class _AssetListScreenState extends State<AssetListScreen> {
       floatingActionButton: FloatingActionButton(
         tooltip: '新增资产',
         onPressed: () => _openEditor(),
-        backgroundColor: AppColors.ink,
-        foregroundColor: AppColors.sheet,
+        backgroundColor: skin.textPrimary,
+        foregroundColor: skin.surface,
         elevation: 0,
         focusElevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -410,7 +411,7 @@ class _AssetListScreenState extends State<AssetListScreen> {
           },
         ),
       ),
-      Container(width: 1, color: AppColors.rule),
+      Container(width: 1, color: context.skin.outline),
       SizedBox(
         width: 420,
         child: _buildMainContent(
@@ -422,7 +423,7 @@ class _AssetListScreenState extends State<AssetListScreen> {
           tasks: tasks,
         ),
       ),
-      Container(width: 1, color: AppColors.rule),
+      Container(width: 1, color: context.skin.outline),
       Expanded(child: _buildDesktopDetailPane()),
     ],
   );
@@ -431,9 +432,9 @@ class _AssetListScreenState extends State<AssetListScreen> {
     final assetId = _selectedAssetId;
     if (assetId == null) {
       return Container(
-        color: AppColors.paper,
-        child: const Center(
-          child: Text('选择左侧资产查看详情', style: TextStyle(color: AppColors.ink2)),
+        color: context.skin.canvas,
+        child: Center(
+          child: Text('选择左侧资产查看详情', style: TextStyle(color: context.skin.textSecondary)),
         ),
       );
     }
@@ -717,7 +718,7 @@ class _AssetTypeSheet extends StatelessWidget {
           Text(
             '不同类型会展示对应字段模板',
             style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: AppColors.dayTextSecondary),
+                ?.copyWith(color: context.skin.textSecondary),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -751,7 +752,7 @@ class _TypeOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: AppColors.paper,
+    color: context.skin.canvas,
     borderRadius: BorderRadius.circular(8),
     child: InkWell(
       borderRadius: BorderRadius.circular(8),
@@ -760,7 +761,7 @@ class _TypeOptionCard extends StatelessWidget {
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.rule),
+          border: Border.all(color: context.skin.outline),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -779,7 +780,7 @@ class _TypeOptionCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.dayTextSecondary,
+                color: context.skin.textSecondary,
                 fontSize: 10,
                 height: 1.2,
               ),
@@ -889,13 +890,14 @@ class _SearchHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final quickTypes = [
       AssetType.password,
       AssetType.apiKey,
       AssetType.subscription,
     ];
     return Material(
-      color: AppColors.dayBackground,
+      color: skin.canvas,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
         child: Column(
@@ -999,7 +1001,7 @@ class _SearchHeader extends StatelessWidget {
             Text(
               '当前 $resultCount 项 · 30 天临期 $dueSoonCount 项',
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AppColors.dayTextSecondary),
+                  ?.copyWith(color: skin.textSecondary),
             ),
           ],
         ),
@@ -1043,7 +1045,7 @@ class _QuickChip extends StatelessWidget {
     selected: selected,
     onSelected: (_) => onTap(),
     showCheckmark: false,
-    side: BorderSide(color: selected ? AppColors.ink : AppColors.rule),
+    side: BorderSide(color: selected ? context.skin.textPrimary : context.skin.outline),
     labelPadding: const EdgeInsets.symmetric(horizontal: 2),
   );
 }
@@ -1126,6 +1128,7 @@ class _FilterSheetState extends State<_FilterSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final resultCount = _draft.apply(widget.assets, widget.relations).length;
     return SizedBox(
       height: MediaQuery.sizeOf(context).height * .86,
@@ -1166,8 +1169,8 @@ class _FilterSheetState extends State<_FilterSheet> {
                           selected: _draft.types.contains(type),
                           side: BorderSide(
                             color: _draft.types.contains(type)
-                                ? AppColors.ink
-                                : AppColors.rule,
+                                ? skin.textPrimary
+                                : skin.outline,
                           ),
                           onSelected: (_) => _toggleType(type),
                         ),
@@ -1186,8 +1189,8 @@ class _FilterSheetState extends State<_FilterSheet> {
                             selected: _draft.includedTags.contains(tag),
                             side: BorderSide(
                               color: _draft.includedTags.contains(tag)
-                                  ? AppColors.ink
-                                  : AppColors.rule,
+                                  ? skin.textPrimary
+                                  : skin.outline,
                             ),
                             onSelected: (_) => _toggleIncludedTag(tag),
                           ),
@@ -1205,8 +1208,8 @@ class _FilterSheetState extends State<_FilterSheet> {
                             selected: _draft.excludedTags.contains(tag),
                             side: BorderSide(
                               color: _draft.excludedTags.contains(tag)
-                                  ? AppColors.ink
-                                  : AppColors.rule,
+                                  ? skin.textPrimary
+                                  : skin.outline,
                             ),
                             onSelected: (_) => _toggleExcludedTag(tag),
                           ),
@@ -1225,8 +1228,8 @@ class _FilterSheetState extends State<_FilterSheet> {
                           selected: _draft.statuses.contains(status),
                           side: BorderSide(
                             color: _draft.statuses.contains(status)
-                                ? AppColors.ink
-                                : AppColors.rule,
+                                ? skin.textPrimary
+                                : skin.outline,
                           ),
                           onSelected: (_) => _toggleStatus(status),
                         ),
@@ -1244,8 +1247,8 @@ class _FilterSheetState extends State<_FilterSheet> {
                           selected: _draft.sort == option,
                           side: BorderSide(
                             color: _draft.sort == option
-                                ? AppColors.ink
-                                : AppColors.rule,
+                                ? skin.textPrimary
+                                : skin.outline,
                           ),
                           onSelected: (_) => setState(
                             () => _draft = _draft.copyWith(sort: option),
@@ -1265,7 +1268,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                     child: Text(
                       '当前 $resultCount 项',
                       style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: AppColors.dayTextSecondary),
+                          ?.copyWith(color: skin.textSecondary),
                     ),
                   ),
                   FilledButton(
@@ -1309,7 +1312,7 @@ class _SectionTitle extends StatelessWidget {
     child: Text(
       title,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-        color: AppColors.dayTextSecondary,
+        color: context.skin.textSecondary,
         fontWeight: FontWeight.w600,
       ),
     ),
@@ -1341,12 +1344,12 @@ class _GoodWatchtowerRow extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: 56,
     alignment: Alignment.centerLeft,
-    decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: AppColors.rule)),
+    decoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: context.skin.outline)),
     ),
-    child: const Row(
+    child: Row(
       children: [
-        Icon(Icons.verified_outlined, size: 20, color: AppColors.ok),
+        Icon(Icons.verified_outlined, size: 20, color: context.skin.success),
         SizedBox(width: 10),
         Expanded(child: Text('保险库状态良好')),
       ],
@@ -1367,7 +1370,7 @@ class _HomeWatchtower extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: AppColors.paper,
+    color: context.skin.canvas,
     child: Column(
       children: [
         if (tasks.isEmpty)
@@ -1403,9 +1406,10 @@ class _CollectionsPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final tags = assets.expand((asset) => asset.tags).toSet().toList()..sort();
     return ColoredBox(
-      color: AppColors.paper,
+      color: skin.canvas,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
         children: [
@@ -1489,10 +1493,10 @@ class _CollectionRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         alignment: Alignment.centerLeft,
         decoration: BoxDecoration(
-          color: selected ? AppColors.paper2 : Colors.transparent,
+          color: selected ? context.skin.surfaceAlt : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? AppColors.ink : Colors.transparent,
+            color: selected ? context.skin.textPrimary : Colors.transparent,
           ),
         ),
         child: Row(
@@ -1508,7 +1512,7 @@ class _CollectionRow extends StatelessWidget {
             Text(
               '$count',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.ink2,
+                color: context.skin.textSecondary,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
@@ -1537,18 +1541,18 @@ class _TaskCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         overlayColor: WidgetStatePropertyAll(
-          AppColors.paper2.withValues(alpha: 1),
+          context.skin.surfaceAlt.withValues(alpha: 1),
         ),
         onTap: onView,
         child: Container(
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppColors.rule)),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: context.skin.outline)),
           ),
           child: Row(
             children: [
-              Icon(task.icon, color: AppColors.ink2, size: 20),
+              Icon(task.icon, color: context.skin.textSecondary, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1566,7 +1570,7 @@ class _TaskCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: AppColors.dayTextSecondary),
+                          ?.copyWith(color: context.skin.textSecondary),
                     ),
                   ],
                 ),
@@ -1608,6 +1612,7 @@ class _AssetRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final dueDate = AssetFilter.dueDateOf(asset);
     final amount =
         (asset.type == AssetType.bill || asset.type == AssetType.subscription)
@@ -1621,12 +1626,12 @@ class _AssetRow extends StatelessWidget {
     ].where((item) => item.trim().isNotEmpty).join(' · ');
 
     return Material(
-      color: selected ? AppColors.paper2 : Colors.transparent,
+      color: selected ? skin.surfaceAlt : Colors.transparent,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           overlayColor: WidgetStatePropertyAll(
-            AppColors.paper2.withValues(alpha: 1),
+            skin.surfaceAlt.withValues(alpha: 1),
           ),
           onTap: onTap,
           onLongPress: onToggleSelected,
@@ -1636,10 +1641,10 @@ class _AssetRow extends StatelessWidget {
             decoration: BoxDecoration(
               border: Border(
                 left: BorderSide(
-                  color: asset.isPinned ? AppColors.ink : Colors.transparent,
+                  color: asset.isPinned ? skin.textPrimary : Colors.transparent,
                   width: 2,
                 ),
-                bottom: const BorderSide(color: AppColors.rule),
+                bottom: BorderSide(color: skin.outline),
               ),
             ),
             child: Row(
@@ -1674,7 +1679,7 @@ class _AssetRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: AppColors.dayTextSecondary),
+                            ?.copyWith(color: skin.textSecondary),
                       ),
                     ],
                   ),
@@ -1689,10 +1694,10 @@ class _AssetRow extends StatelessWidget {
                     ),
                   ),
                 ] else if (!selectionMode)
-                  const Icon(
+                  Icon(
                     Icons.chevron_right,
                     size: 18,
-                    color: AppColors.ink3,
+                    color: skin.textTertiary,
                   ),
               ],
             ),

@@ -118,7 +118,7 @@ class _UnlockScreenState extends State<UnlockScreen>
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppColors.paper,
+    backgroundColor: context.skin.canvas,
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(
@@ -143,9 +143,9 @@ class _UnlockScreenState extends State<UnlockScreen>
               child: Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AppColors.sheet,
+                  color: context.skin.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.rule),
+                  border: Border.all(color: context.skin.outline),
                 ),
                 child: Form(
                   key: _formKey,
@@ -165,7 +165,7 @@ class _UnlockScreenState extends State<UnlockScreen>
                         _isFirstRun ? '主密码用于加密你的所有敏感数据。' : '输入主密码以查看敏感数据。',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: AppColors.dayTextSecondary),
+                            ?.copyWith(color: context.skin.textSecondary),
                       ),
                       if (kIsWeb) ...[
                         const SizedBox(height: 12),
@@ -175,12 +175,12 @@ class _UnlockScreenState extends State<UnlockScreen>
                             vertical: 10,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.paper2,
+                            color: context.skin.surfaceAlt,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Web 预览：数据仅保存在本次浏览器会话，正式数据请使用 Android 应用。',
-                            style: TextStyle(color: AppColors.ink2),
+                            style: TextStyle(color: context.skin.textSecondary),
                           ),
                         ),
                       ],
@@ -217,7 +217,7 @@ class _UnlockScreenState extends State<UnlockScreen>
                         const SizedBox(height: 8),
                         Text(
                           _error!,
-                          style: const TextStyle(color: AppColors.danger),
+                          style: TextStyle(color: context.skin.danger),
                         ),
                       ],
                       if (_isFirstRun) ...[
@@ -228,12 +228,12 @@ class _UnlockScreenState extends State<UnlockScreen>
                             vertical: 10,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.paper2,
+                            color: context.skin.surfaceAlt,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
+                          child: Text(
                             '主密码无法找回。丢失后只能重置保险库。',
-                            style: TextStyle(color: AppColors.ink2),
+                            style: TextStyle(color: context.skin.textSecondary),
                           ),
                         ),
                       ],
@@ -276,9 +276,9 @@ class _VaultMark extends StatelessWidget {
     alignment: Alignment.center,
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      border: Border.all(color: AppColors.ink, width: 1.5),
+      border: Border.all(color: context.skin.textPrimary, width: 1.5),
     ),
-    child: const Icon(Icons.shield_outlined, color: AppColors.ink, size: 26),
+    child: Icon(Icons.shield_outlined, color: context.skin.textPrimary, size: 26),
   );
 }
 

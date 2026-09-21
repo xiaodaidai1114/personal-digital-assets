@@ -19,16 +19,15 @@ class AssetTypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).brightness == Brightness.dark
-        ? AppColors.typeLight(type)
-        : AppColors.typeDeep(type);
+    final skin = context.skin;
+    final color = skin.textPrimary;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: selected ? AppColors.ink : color,
+          color: selected ? skin.primary : color,
           width: selected ? 2 : 1.5,
         ),
       ),

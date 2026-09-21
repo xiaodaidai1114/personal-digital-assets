@@ -5,7 +5,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../domain/asset.dart';
 import '../../domain/relation.dart';
-import '../../theme/app_theme.dart';
+import 'graph_palette.dart';
 import '../widgets/asset_type_badge.dart';
 
 /// Android 端 G6 图谱容器：WebView 内嵌离线 G6 页面，原生侧只传 JSON 数据。
@@ -168,13 +168,13 @@ class _GraphFailureList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-    color: AppColors.nightBackground,
+    color: kGraphBackground,
     child: ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: assets.length,
       separatorBuilder: (context, index) => Divider(
         height: 1,
-        color: AppColors.nightTextPrimary.withValues(alpha: .12),
+        color: kGraphTextPrimary.withValues(alpha: .12),
       ),
       itemBuilder: (context, index) {
         final asset = assets[index];
@@ -195,11 +195,11 @@ class _GraphFailureList extends StatelessWidget {
               asset.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.nightTextPrimary),
+              style: const TextStyle(color: kGraphTextPrimary),
             ),
             subtitle: Text(
               '$relationCount 条关系',
-              style: const TextStyle(color: AppColors.nightTextSecondary),
+              style: const TextStyle(color: kGraphTextSecondary),
             ),
             onTap: () => onOpenNode(asset),
           ),

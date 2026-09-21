@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../data/asset_repository.dart';
 import '../domain/asset.dart';
 import '../domain/relation.dart';
-import '../theme/app_theme.dart';
+import 'graph/graph_palette.dart';
 import '../vault/vault_controller.dart';
 import 'asset_detail_screen.dart';
 import 'asset_edit_screen.dart';
@@ -157,12 +157,12 @@ class _GraphScreenState extends State<GraphScreen> {
         '${asset.type.label} · $relationCount 关联${asset.tags.isEmpty ? '' : ' · ${asset.tags.take(2).join('/')}'}';
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.nightSurface,
+      backgroundColor: kGraphSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
       builder: (sheetContext) => Theme(
-        data: AppTheme.night(),
+        data: graphTheme(),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -185,7 +185,7 @@ class _GraphScreenState extends State<GraphScreen> {
                           Text(
                             metaText,
                             style: Theme.of(sheetContext).textTheme.bodySmall
-                                ?.copyWith(color: AppColors.nightTextSecondary),
+                                ?.copyWith(color: kGraphTextSecondary),
                           ),
                         ],
                       ),
@@ -198,9 +198,9 @@ class _GraphScreenState extends State<GraphScreen> {
                     Expanded(
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.nightTextPrimary,
+                          foregroundColor: kGraphTextPrimary,
                           side: BorderSide(
-                            color: AppColors.nightTextPrimary.withValues(
+                            color: kGraphTextPrimary.withValues(
                               alpha: .38,
                             ),
                           ),
@@ -216,8 +216,8 @@ class _GraphScreenState extends State<GraphScreen> {
                     Expanded(
                       child: FilledButton(
                         style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.nightTextPrimary,
-                          foregroundColor: AppColors.nightBackground,
+                          backgroundColor: kGraphTextPrimary,
+                          foregroundColor: kGraphBackground,
                         ),
                         onPressed: () {
                           Navigator.of(sheetContext).pop();
@@ -249,9 +249,9 @@ class _GraphScreenState extends State<GraphScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      backgroundColor: AppColors.nightSurface,
+      backgroundColor: kGraphSurface,
       builder: (sheetContext) => Theme(
-        data: AppTheme.night(),
+        data: graphTheme(),
         child: _GraphFilterSheet(
           selectedTypes: _selectedTypes,
           selectedRelationTypes: _selectedRelationTypes,
@@ -274,15 +274,15 @@ class _GraphScreenState extends State<GraphScreen> {
     // 避免夜墨画布上顶着纸色系统栏与深色图标；离开星图后由 AppRoot 的
     // 日间注解恢复纸底墨图标（更近的注解优先生效，此处在最上层）。
     value: SystemUiOverlayStyle.light.copyWith(
-      statusBarColor: AppColors.nightBackground,
-      systemNavigationBarColor: AppColors.nightSurface,
+      statusBarColor: kGraphBackground,
+      systemNavigationBarColor: kGraphSurface,
       systemNavigationBarIconBrightness: Brightness.light,
     ),
     child: Theme(
-      data: AppTheme.night(),
+      data: graphTheme(),
       child: Scaffold(
         body: Container(
-          color: AppColors.nightBackground,
+          color: kGraphBackground,
           child: SafeArea(
             bottom: false,
             child: Column(
@@ -382,12 +382,12 @@ class _GraphScreenState extends State<GraphScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               decoration: BoxDecoration(
-                color: AppColors.nightSurface.withValues(alpha: .86),
+                color: kGraphSurface.withValues(alpha: .86),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
                 '当前筛选没有关系；清空关系类型可查看全部资产网络。',
-                style: TextStyle(color: AppColors.nightTextSecondary),
+                style: TextStyle(color: kGraphTextSecondary),
               ),
             ),
           ),
@@ -446,7 +446,7 @@ class _GraphSearchHeader extends StatelessWidget {
                   child: IconButton(
                     onPressed: onBack,
                     icon: const Icon(Icons.arrow_back),
-                    color: AppColors.nightTextPrimary,
+                    color: kGraphTextPrimary,
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -455,29 +455,29 @@ class _GraphSearchHeader extends StatelessWidget {
                 child: TextField(
                   controller: controller,
                   onChanged: (_) => onChanged(),
-                  style: const TextStyle(color: AppColors.nightTextPrimary),
+                  style: const TextStyle(color: kGraphTextPrimary),
                   decoration: InputDecoration(
                     hintText: '搜索节点，自动保留一跳邻域',
                     hintStyle: const TextStyle(
-                      color: AppColors.nightTextSecondary,
+                      color: kGraphTextSecondary,
                     ),
                     prefixIcon: const Icon(
                       Icons.search,
-                      color: AppColors.nightTextSecondary,
+                      color: kGraphTextSecondary,
                     ),
                     suffixIcon: controller.text.isEmpty
                         ? null
                         : IconButton(
                             tooltip: '清除节点搜索',
                             icon: const Icon(Icons.close),
-                            color: AppColors.nightTextSecondary,
+                            color: kGraphTextSecondary,
                             onPressed: () {
                               controller.clear();
                               onChanged();
                             },
                           ),
                     filled: true,
-                    fillColor: AppColors.nightSurface.withValues(alpha: .78),
+                    fillColor: kGraphSurface.withValues(alpha: .78),
                   ),
                 ),
               ),
@@ -487,12 +487,12 @@ class _GraphSearchHeader extends StatelessWidget {
                 icon: const Icon(Icons.tune),
                 label: Text(filterCount == 0 ? '筛选' : '$filterCount'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.nightSurface.withValues(
+                  backgroundColor: kGraphSurface.withValues(
                     alpha: .86,
                   ),
-                  foregroundColor: AppColors.nightTextPrimary,
+                  foregroundColor: kGraphTextPrimary,
                   side: BorderSide(
-                    color: AppColors.nightTextPrimary.withValues(alpha: .16),
+                    color: kGraphTextPrimary.withValues(alpha: .16),
                   ),
                   minimumSize: const Size(52, 48),
                 ),
@@ -506,7 +506,7 @@ class _GraphSearchHeader extends StatelessWidget {
                 child: Text(
                   '$nodeCount 个节点 · $relationCount 条关系',
                   style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: AppColors.nightTextSecondary),
+                      ?.copyWith(color: kGraphTextSecondary),
                 ),
               ),
               TextButton(onPressed: onClear, child: const Text('清空')),

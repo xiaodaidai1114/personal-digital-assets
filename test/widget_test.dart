@@ -6,6 +6,7 @@ import 'package:personal_digital_assets/crypto/kdf.dart';
 import 'package:personal_digital_assets/data/app_update.dart';
 import 'package:personal_digital_assets/theme/app_theme.dart';
 import 'package:personal_digital_assets/ui/asset_detail_screen.dart';
+import 'package:personal_digital_assets/ui/graph/graph_palette.dart';
 import 'package:personal_digital_assets/ui/graph/native_graph_view.dart';
 import 'package:personal_digital_assets/ui/graph_screen.dart';
 import 'package:personal_digital_assets/vault/vault_controller.dart';
@@ -52,8 +53,8 @@ void main() {
       find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
     ).value;
     expect(overlay.statusBarIconBrightness, Brightness.dark);
-    expect(overlay.statusBarColor, AppColors.paper);
-    expect(overlay.systemNavigationBarColor, AppColors.paper);
+    expect(overlay.statusBarColor, AppSkin.light.canvas);
+    expect(overlay.systemNavigationBarColor, AppSkin.light.canvas);
   });
 
   testWidgets('创建主密码后进入资产列表并显示演示数据', (tester) async {
@@ -115,7 +116,7 @@ void main() {
     final navigationBar = tester.widget<NavigationBar>(
       find.byType(NavigationBar),
     );
-    expect(navigationBar.backgroundColor, AppColors.sheet);
+    expect(navigationBar.backgroundColor, AppSkin.light.surface);
 
     // 星图已移出底栏，入口在资产详情页「打开星图」
     await tester.ensureVisible(find.text('主邮箱').last);
@@ -142,8 +143,8 @@ void main() {
       ),
     ).value;
     expect(overlay.statusBarIconBrightness, Brightness.light);
-    expect(overlay.statusBarColor, AppColors.nightBackground);
-    expect(overlay.systemNavigationBarColor, AppColors.nightSurface);
+    expect(overlay.statusBarColor, kGraphBackground);
+    expect(overlay.systemNavigationBarColor, kGraphSurface);
   });
 
   testWidgets('星图搜索聚焦一跳时保留全部节点', (tester) async {
@@ -309,7 +310,7 @@ void main() {
     expect(Theme.of(titleContext).brightness, Brightness.dark);
     expect(
       Theme.of(titleContext).scaffoldBackgroundColor,
-      AppColors.nightBackground,
+      kGraphBackground,
     );
   });
 
@@ -359,13 +360,20 @@ void main() {
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
     expect(find.text('界面模式'), findsOneWidget);
-    expect(find.text('早晨和晚上都使用白底黑字'), findsOneWidget);
-    await tester.tap(find.text('晚上'));
+    expect(find.text('原生亮暗双主题，跟随系统时自动切换'), findsOneWidget);
+    // 暗色为原生 Night Theme：切到暗色后 MaterialApp 走 darkTheme
+    await tester.tap(find.text('暗色'));
     await tester.pumpAndSettle();
-    expect(find.byType(ColorFiltered), findsOneWidget);
-    await tester.tap(find.text('早晨'));
+    final materialApp = tester.widget<MaterialApp>(
+      find.byType(MaterialApp).first,
+    );
+    expect(materialApp.themeMode, ThemeMode.dark);
+    await tester.tap(find.text('跟随系统'));
     await tester.pumpAndSettle();
-    expect(find.byType(ColorFiltered), findsNothing);
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp).first).themeMode,
+      ThemeMode.system,
+    );
     expect(find.text('立即锁定'), findsOneWidget);
     expect(find.text('自动锁定时长'), findsOneWidget);
     expect(find.text('生物识别解锁'), findsOneWidget);

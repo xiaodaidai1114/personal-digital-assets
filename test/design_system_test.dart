@@ -2,18 +2,18 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:getwidget/getwidget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:personal_digital_assets/app.dart';
 import 'package:personal_digital_assets/data/settings_store.dart';
-import 'package:personal_digital_assets/domain/asset.dart';
 import 'package:personal_digital_assets/theme/app_theme.dart';
 
 void main() {
-  testWidgets('日常主题锁定纸墨、小圆角与无阴影', (tester) async {
+  testWidgets('亮色主题锁定 GF 色板、小圆角与无阴影', (tester) async {
     late ThemeData theme;
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.day(),
+        theme: AppTheme.light(),
         home: Builder(
           builder: (context) {
             theme = Theme.of(context);
@@ -23,25 +23,32 @@ void main() {
       ),
     );
 
-    expect(theme.scaffoldBackgroundColor, AppColors.paper);
-    expect(theme.cardTheme.color, AppColors.sheet);
+    expect(theme.brightness, Brightness.light);
+    // GF 基底：F4F5F8 画布 + 白卡面 + 3880FF 主按钮
+    expect(theme.scaffoldBackgroundColor, GFColors.BACKGROUND);
+    expect(theme.scaffoldBackgroundColor, AppSkin.light.canvas);
+    expect(theme.cardTheme.color, AppSkin.light.surface);
     expect(theme.cardTheme.elevation, 0);
+    expect(theme.colorScheme.primary, GFColors.PRIMARY);
+    expect(theme.colorScheme.error, GFColors.DANGER);
     expect(
       theme.filledButtonTheme.style?.backgroundColor?.resolve({}),
-      AppColors.ink,
+      GFColors.PRIMARY,
     );
     expect(
       theme.filledButtonTheme.style?.backgroundColor?.resolve({
         WidgetState.disabled,
       }),
-      AppColors.paper2,
+      AppSkin.light.surfaceAlt,
     );
     expect(
       theme.filledButtonTheme.style?.foregroundColor?.resolve({
         WidgetState.disabled,
       }),
-      AppColors.ink2,
+      AppSkin.light.disabled,
     );
+    // 皮肤扩展随主题注册，context.skin 取到亮色实例
+    expect(theme.extension<AppSkin>(), AppSkin.light);
 
     final cardShape = theme.cardTheme.shape as RoundedRectangleBorder;
     final cardRadius = cardShape.borderRadius as BorderRadius;
@@ -52,23 +59,43 @@ void main() {
     expect(inputBorder.borderRadius.topLeft, const Radius.circular(8));
   });
 
-  test('类型色默认关闭为墨色，星图使用夜墨', () {
-    expect(AppColors.typeDeep(AssetType.bill), AppColors.ink);
-    expect(AppColors.typeLight(AssetType.subscription), AppColors.graphNode);
+  testWidgets('暗色主题为原生 Night Theme 并注册暗色皮肤', (tester) async {
+    late ThemeData theme;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: ThemeMode.dark,
+        home: Builder(
+          builder: (context) {
+            theme = Theme.of(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    expect(theme.brightness, Brightness.dark);
+    expect(theme.scaffoldBackgroundColor, AppSkin.dark.canvas);
+    expect(theme.cardTheme.color, AppSkin.dark.surface);
+    expect(theme.colorScheme.primary, GFColors.PRIMARY);
+    expect(theme.colorScheme.error, GFColors.DANGER);
+    expect(theme.extension<AppSkin>(), AppSkin.dark);
   });
 
-  test('浅色纸面上的文字对比度不低于 4.5:1', () {
-    const daySurfaces = [AppColors.paper, AppColors.paper2, AppColors.sheet];
-    const dayTextColors = [
-      AppColors.ink,
-      AppColors.ink2,
-      AppColors.ink3,
-      AppColors.mark,
-      AppColors.danger,
+  test('亮色正文对比度不低于 4.5:1（GF 派生色板）', () {
+    final lightSurfaces = [
+      AppSkin.light.canvas,
+      AppSkin.light.surface,
+      AppSkin.light.surfaceAlt,
+    ];
+    final lightTextColors = [
+      AppSkin.light.textPrimary,
+      AppSkin.light.textSecondary,
     ];
 
-    for (final surface in daySurfaces) {
-      for (final textColor in dayTextColors) {
+    for (final surface in lightSurfaces) {
+      for (final textColor in lightTextColors) {
         expect(
           _relativeLuminance(textColor),
           lessThan(_relativeLuminance(surface)),
@@ -83,38 +110,15 @@ void main() {
     }
   });
 
-  test('早晨和晚上都保持浅色黑字', () async {
-    final store = MemorySettingsStore();
-    expect(await store.appearance(), AppAppearance.morning);
-    await store.setAppearance(AppAppearance.evening);
-    expect(await store.appearance(), AppAppearance.evening);
-
-    for (var index = 0; index < 3; index++) {
-      expect(AppTheme.eveningMatrix[index * 6], lessThanOrEqualTo(1));
-      expect(AppTheme.eveningMatrix[index * 6], greaterThan(0));
-    }
-    expect(AppTheme.eveningMatrix[18], 1);
-  });
-
-  test('外观偏好可持久化', () async {
-    SharedPreferences.setMockInitialValues({
-      'settings.appearance': AppAppearance.evening.storageValue,
-    });
-    final store = SharedPrefsSettingsStore();
-    expect(await store.appearance(), AppAppearance.evening);
-    await store.setAppearance(AppAppearance.morning);
-    expect(await store.appearance(), AppAppearance.morning);
-  });
-
-  test('夜墨表面才允许使用浅色文字', () {
-    const nightSurfaces = [AppColors.nightBackground, AppColors.nightSurface];
-    const nightTextColors = [
-      AppColors.nightTextPrimary,
-      AppColors.nightTextSecondary,
+  test('暗色正文对比度不低于 4.5:1（GF 派生色板）', () {
+    final darkSurfaces = [AppSkin.dark.canvas, AppSkin.dark.surface];
+    final darkTextColors = [
+      AppSkin.dark.textPrimary,
+      AppSkin.dark.textSecondary,
     ];
 
-    for (final surface in nightSurfaces) {
-      for (final textColor in nightTextColors) {
+    for (final surface in darkSurfaces) {
+      for (final textColor in darkTextColors) {
         expect(
           _relativeLuminance(textColor),
           greaterThan(_relativeLuminance(surface)),
@@ -124,14 +128,62 @@ void main() {
     }
   });
 
-  testWidgets('日常界面锁定浅色，不随系统深色切换', (tester) async {
+  test('操作色在浅底上保持 UI 级对比（≥ 3:1）', () {
+    final surfaces = [AppSkin.light.canvas, AppSkin.light.surface];
+    final accents = [
+      AppSkin.light.primary,
+      AppSkin.light.danger,
+      AppSkin.light.success,
+    ];
+    for (final surface in surfaces) {
+      for (final accent in accents) {
+        expect(
+          _contrastRatio(accent, surface),
+          greaterThanOrEqualTo(3),
+          reason: '${accent.toARGB32()} on ${surface.toARGB32()}',
+        );
+      }
+    }
+  });
+
+  test('外观模式默认亮色且支持暗色与跟随系统', () async {
+    final store = MemorySettingsStore();
+    expect(await store.themeMode(), AppThemeMode.light);
+    await store.setThemeMode(AppThemeMode.dark);
+    expect(await store.themeMode(), AppThemeMode.dark);
+    await store.setThemeMode(AppThemeMode.system);
+    expect(await store.themeMode(), AppThemeMode.system);
+    expect(AppThemeMode.system.flutter, ThemeMode.system);
+    expect(AppThemeMode.dark.flutter, ThemeMode.dark);
+  });
+
+  test('旧版 morning/evening 存量值迁移为亮色', () {
+    expect(AppThemeMode.fromStorage('morning'), AppThemeMode.light);
+    expect(AppThemeMode.fromStorage('evening'), AppThemeMode.light);
+    expect(AppThemeMode.fromStorage(null), AppThemeMode.light);
+    expect(AppThemeMode.fromStorage('dark'), AppThemeMode.dark);
+    expect(AppThemeMode.fromStorage('system'), AppThemeMode.system);
+  });
+
+  test('外观偏好可持久化', () async {
+    SharedPreferences.setMockInitialValues({
+      'settings.appearance': AppThemeMode.dark.storageValue,
+    });
+    final store = SharedPrefsSettingsStore();
+    expect(await store.themeMode(), AppThemeMode.dark);
+    await store.setThemeMode(AppThemeMode.system);
+    expect(await store.themeMode(), AppThemeMode.system);
+  });
+
+  testWidgets('应用默认亮色并提供原生暗色主题', (tester) async {
     await tester.pumpWidget(const PersonalDigitalAssetsApp());
 
     final materialApp = tester.widget<MaterialApp>(
       find.byType(MaterialApp).first,
     );
     expect(materialApp.themeMode, ThemeMode.light);
-    expect(materialApp.darkTheme, isNull);
+    expect(materialApp.darkTheme, isNotNull);
+    expect(materialApp.darkTheme!.brightness, Brightness.dark);
   });
 }
 

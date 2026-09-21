@@ -451,8 +451,9 @@ class _TypePickerChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     return Material(
-      color: selected ? AppColors.paper2 : AppColors.sheet,
+      color: selected ? skin.surfaceAlt : skin.surface,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -462,7 +463,7 @@ class _TypePickerChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: selected ? AppColors.ink : AppColors.rule,
+              color: selected ? skin.textPrimary : skin.outline,
               width: selected ? 2 : 1,
             ),
           ),
@@ -495,11 +496,11 @@ class _SealedSecretCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: EdgeInsets.zero,
     child: CustomPaint(
-      foregroundPainter: const DashedBorder(color: AppColors.ink3),
+      foregroundPainter: DashedBorder(color: context.skin.textTertiary),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.sheet,
+          color: context.skin.surface,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(

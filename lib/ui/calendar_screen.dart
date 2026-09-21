@@ -268,6 +268,7 @@ class _MonthGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final firstDay = DateTime(focusedMonth.year, focusedMonth.month);
     // 周一为一周起点：0=周一。
     final leadingBlanks = (firstDay.weekday - 1) % 7;
@@ -286,7 +287,7 @@ class _MonthGrid extends StatelessWidget {
             child: Text(
               '一二三四五六日'[i],
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AppColors.dayTextSecondary),
+                  ?.copyWith(color: skin.textSecondary),
             ),
           ),
         ),
@@ -309,14 +310,14 @@ class _MonthGrid extends StatelessWidget {
             margin: const EdgeInsets.all(2),
             height: 52,
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.paper2 : Colors.transparent,
+              color: isSelected ? skin.surfaceAlt : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: isSelected
-                    ? AppColors.ink
+                    ? skin.textPrimary
                     : isToday
-                    ? AppColors.mark
-                    : AppColors.dayOutline,
+                    ? skin.primary
+                    : skin.outline,
               ),
             ),
             child: Column(
@@ -327,7 +328,7 @@ class _MonthGrid extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
-                    color: isToday ? AppColors.mark : AppColors.ink,
+                    color: isToday ? skin.primary : skin.textPrimary,
                     fontFeatures: [FontFeature.tabularFigures()],
                   ),
                 ),
@@ -343,7 +344,7 @@ class _MonthGrid extends StatelessWidget {
                             height: 5,
                             margin: const EdgeInsets.symmetric(horizontal: 1.5),
                             decoration: BoxDecoration(
-                              color: AppColors.ink,
+                              color: skin.textPrimary,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -399,12 +400,12 @@ class _GoodReminderRow extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: 56,
     alignment: Alignment.centerLeft,
-    decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: AppColors.rule)),
+    decoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: context.skin.outline)),
     ),
-    child: const Row(
+    child: Row(
       children: [
-        Icon(Icons.verified_outlined, size: 20, color: AppColors.ok),
+        Icon(Icons.verified_outlined, size: 20, color: context.skin.success),
         SizedBox(width: 10),
         Expanded(child: Text('保险库状态良好')),
       ],
@@ -428,6 +429,7 @@ class _ReminderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final skin = context.skin;
     final daysLeft = item.dueDate
         .difference(
           DateTime(
@@ -445,8 +447,8 @@ class _ReminderTile extends StatelessWidget {
         child: Container(
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppColors.rule)),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: skin.outline)),
           ),
           child: Row(
             children: [
@@ -471,7 +473,7 @@ class _ReminderTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: AppColors.dayTextSecondary),
+                          ?.copyWith(color: skin.textSecondary),
                     ),
                   ],
                 ),
@@ -479,7 +481,7 @@ class _ReminderTile extends StatelessWidget {
               Text(
                 daysLeft == 0 ? '今天' : '$daysLeft 天后',
                 style: TextStyle(
-                  color: daysLeft <= 3 ? AppColors.danger : AppColors.ink2,
+                  color: daysLeft <= 3 ? skin.danger : skin.textSecondary,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),

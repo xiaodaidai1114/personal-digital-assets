@@ -19,7 +19,11 @@ class EmptyState extends StatelessWidget {
   final bool dark;
 
   @override
-  Widget build(BuildContext context) => Center(
+  Widget build(BuildContext context) {
+    final skin = context.skin;
+    // 星图空态仍走固定夜色（dark=true），随 Stage 2 拆除星图一并移除。
+    final ink = dark ? const Color(0xFFEDE8DC) : skin.textPrimary;
+    return Center(
     child: Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -30,16 +34,9 @@ class EmptyState extends StatelessWidget {
             height: 56,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                color: dark ? AppColors.nightTextPrimary : AppColors.ink,
-                width: 1.5,
-              ),
+              border: Border.all(color: ink, width: 1.5),
             ),
-            child: Icon(
-              icon,
-              color: dark ? AppColors.nightTextPrimary : AppColors.ink,
-              size: 24,
-            ),
+            child: Icon(icon, color: ink, size: 24),
           ),
           const SizedBox(height: 16),
           Text(
@@ -53,4 +50,5 @@ class EmptyState extends StatelessWidget {
       ),
     ),
   );
+  }
 }

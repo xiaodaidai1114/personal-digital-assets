@@ -1,17 +1,28 @@
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum AppAppearance {
-  morning('morning'),
-  evening('evening');
+enum AppThemeMode {
+  light('light'),
+  dark('dark'),
+  system('system');
 
-  const AppAppearance(this.storageValue);
+  const AppThemeMode(this.storageValue);
 
   final String storageValue;
 
-  static AppAppearance fromStorage(String? value) =>
-      value == AppAppearance.evening.storageValue
-      ? AppAppearance.evening
-      : AppAppearance.morning;
+  /// 映射到 MaterialApp.themeMode。
+  ThemeMode get flutter => switch (this) {
+    AppThemeMode.light => ThemeMode.light,
+    AppThemeMode.dark => ThemeMode.dark,
+    AppThemeMode.system => ThemeMode.system,
+  };
+
+  /// 兼容旧版 `morning`/`evening` 存量值：一律回到亮色。
+  static AppThemeMode fromStorage(String? value) => switch (value) {
+    'dark' => AppThemeMode.dark,
+    'system' => AppThemeMode.system,
+    _ => AppThemeMode.light,
+  };
 }
 
 /// 应用设置存储抽象：自动锁定时长等。
@@ -21,15 +32,15 @@ abstract interface class SettingsStore {
 
   Future<void> setAutoLockDelay(Duration? delay);
 
-  Future<AppAppearance> appearance();
+  Future<AppThemeMode> themeMode();
 
-  Future<void> setAppearance(AppAppearance appearance);
+  Future<void> setThemeMode(AppThemeMode mode);
 }
 
 /// 内存实现：测试与依赖注入使用。
 class MemorySettingsStore implements SettingsStore {
   Duration? _delay;
-  AppAppearance _appearance = AppAppearance.morning;
+  AppThemeMode _themeMode = AppThemeMode.light;
 
   @override
   Future<Duration?> autoLockDelay() async => _delay;
@@ -40,11 +51,11 @@ class MemorySettingsStore implements SettingsStore {
   }
 
   @override
-  Future<AppAppearance> appearance() async => _appearance;
+  Future<AppThemeMode> themeMode() async => _themeMode;
 
   @override
-  Future<void> setAppearance(AppAppearance appearance) async {
-    _appearance = appearance;
+  Future<void> setThemeMode(AppThemeMode mode) async {
+    _themeMode = mode;
   }
 }
 
@@ -79,14 +90,14 @@ class SharedPrefsSettingsStore implements SettingsStore {
   }
 
   @override
-  Future<AppAppearance> appearance() async {
+  Future<AppThemeMode> themeMode() async {
     final prefs = await _prefs;
-    return AppAppearance.fromStorage(prefs.getString(_appearanceKey));
+    return AppThemeMode.fromStorage(prefs.getString(_appearanceKey));
   }
 
   @override
-  Future<void> setAppearance(AppAppearance appearance) async {
+  Future<void> setThemeMode(AppThemeMode mode) async {
     final prefs = await _prefs;
-    await prefs.setString(_appearanceKey, appearance.storageValue);
+    await prefs.setString(_appearanceKey, mode.storageValue);
   }
 }
