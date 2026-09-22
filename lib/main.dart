@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'web_fonts.dart';
 
-void main() => runApp(const PersonalDigitalAssetsApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await registerWebFonts();
+  runApp(const PersonalDigitalAssetsApp());
+}

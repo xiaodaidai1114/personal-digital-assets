@@ -48,3 +48,6 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 .playwright-cli/
+
+# Web 预览字体(约 25MB,由 tool/fetch_web_fonts.py 下载;Android 构建不包含)
+/web/fonts/
