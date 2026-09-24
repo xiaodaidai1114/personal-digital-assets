@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:getwidget/getwidget.dart';
@@ -266,25 +268,56 @@ class _UnlockScreenState extends State<UnlockScreen>
   );
 }
 
-/// 保险库徽标：墨色线框。
+/// 保险库徽记：线稿库门 + 表盘把手，纯描边、无填充，契合无阴影视觉契约。
+/// 包一层 Center：父 Column 是 stretch，直接放定宽 Container 会被横向拉成椭圆。
 class _VaultMark extends StatelessWidget {
   const _VaultMark();
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: 56,
-    height: 56,
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      border: Border.all(color: context.skin.textPrimary, width: 1.5),
-    ),
-    child: Icon(
-      Icons.shield_outlined,
-      color: context.skin.textPrimary,
-      size: 26,
+  Widget build(BuildContext context) => Center(
+    child: CustomPaint(
+      size: const Size(64, 64),
+      painter: _VaultEmblemPainter(context.skin.textPrimary),
     ),
   );
+}
+
+class _VaultEmblemPainter extends CustomPainter {
+  _VaultEmblemPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+    // 库门
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(7, 7, size.width - 14, size.height - 14),
+        const Radius.circular(12),
+      ),
+      paint,
+    );
+    final center = Offset(size.width / 2, size.height / 2);
+    // 表盘
+    canvas.drawCircle(center, 11, paint);
+    // 三辐把手
+    for (var i = 0; i < 3; i++) {
+      final angle = -math.pi / 2 + (i * 2 * math.pi / 3);
+      final dir = Offset(math.cos(angle), math.sin(angle));
+      canvas.drawLine(center + dir * 11, center + dir * 17, paint);
+    }
+    // 轴心
+    canvas.drawCircle(center, 2.2, paint..style = PaintingStyle.fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _VaultEmblemPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 /// 提交按钮：busy 态切换为进度条 + 信任文案（设计文档 §4.8）。

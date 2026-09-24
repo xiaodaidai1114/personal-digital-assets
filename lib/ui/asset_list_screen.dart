@@ -15,6 +15,7 @@ import 'asset_detail_screen.dart';
 import 'asset_edit_screen.dart';
 import 'palette/command_palette.dart';
 import 'widgets/asset_type_badge.dart';
+import 'widgets/dashed_border.dart';
 import 'widgets/empty_state.dart';
 import 'widgets/smart_truncate.dart';
 
@@ -318,6 +319,12 @@ class _AssetListScreenState extends State<AssetListScreen> {
                 ),
               ),
             ),
+            // 命令面板入口（DESIGN.md）：常驻 AppBar，与倾倒口视觉分离
+            IconButton(
+              tooltip: '检索',
+              onPressed: _openPalette,
+              icon: const Icon(Icons.search),
+            ),
             // 一键锁定（DESIGN.md）：瞬间锁死，禁止任何二次确认
             IconButton(
               tooltip: '锁定',
@@ -356,6 +363,7 @@ class _AssetListScreenState extends State<AssetListScreen> {
               pinned: pinned,
               others: others,
               dueSoonCount: dueSoonCount,
+              heroTitles: true,
             ),
     );
   }
@@ -390,6 +398,7 @@ class _AssetListScreenState extends State<AssetListScreen> {
           pinned: pinned,
           others: others,
           dueSoonCount: dueSoonCount,
+          heroTitles: false,
         ),
       ),
       Container(width: 1, color: context.skin.outline),
@@ -467,14 +476,11 @@ class _AssetListScreenState extends State<AssetListScreen> {
     required List<Asset> pinned,
     required List<Asset> others,
     required int dueSoonCount,
+    required bool heroTitles,
   }) => Column(
     children: [
       _Dropzone(onDump: _handleDump),
-      _PaletteHeader(
-        assetCount: _assets.length,
-        dueSoonCount: dueSoonCount,
-        onOpenPalette: _openPalette,
-      ),
+      _StatsLine(dueSoonCount: dueSoonCount),
       if (_loading)
         const Expanded(child: _LoadingAssets())
       else if (_error != null)
@@ -495,33 +501,43 @@ class _AssetListScreenState extends State<AssetListScreen> {
                   children: [
                     if (pinned.isNotEmpty) ...[
                       const _SectionTitle('置顶'),
-                      for (final asset in pinned)
-                        _AssetRow(
-                          asset: asset,
-                          relationCount: counts[asset.id] ?? 0,
-                          selectionMode: _selectionMode,
-                          selected: _selectedAssetIds.contains(asset.id),
-                          onToggleSelected: () => _toggleSelection(asset),
-                          onTap: () => _selectionMode
-                              ? _toggleSelection(asset)
-                              : _openDetail(asset.id),
-                          onTogglePinned: () => _togglePinned(asset),
+                      for (var i = 0; i < pinned.length; i++)
+                        _Entrance(
+                          index: i,
+                          child: _AssetRow(
+                            asset: pinned[i],
+                            relationCount: counts[pinned[i].id] ?? 0,
+                            selectionMode: _selectionMode,
+                            selected: _selectedAssetIds.contains(pinned[i].id),
+                            onToggleSelected: () =>
+                                _toggleSelection(pinned[i]),
+                            onTap: () => _selectionMode
+                                ? _toggleSelection(pinned[i])
+                                : _openDetail(pinned[i].id),
+                            onTogglePinned: () => _togglePinned(pinned[i]),
+                            heroTitles: heroTitles,
+                          ),
                         ),
                       const SizedBox(height: 20),
                     ],
                     if (others.isNotEmpty) ...[
                       _SectionTitle(pinned.isEmpty ? '全部资产' : '更多资产'),
-                      for (final asset in others)
-                        _AssetRow(
-                          asset: asset,
-                          relationCount: counts[asset.id] ?? 0,
-                          selectionMode: _selectionMode,
-                          selected: _selectedAssetIds.contains(asset.id),
-                          onToggleSelected: () => _toggleSelection(asset),
-                          onTap: () => _selectionMode
-                              ? _toggleSelection(asset)
-                              : _openDetail(asset.id),
-                          onTogglePinned: () => _togglePinned(asset),
+                      for (var i = 0; i < others.length; i++)
+                        _Entrance(
+                          index: pinned.length + i,
+                          child: _AssetRow(
+                            asset: others[i],
+                            relationCount: counts[others[i].id] ?? 0,
+                            selectionMode: _selectionMode,
+                            selected: _selectedAssetIds.contains(others[i].id),
+                            onToggleSelected: () =>
+                                _toggleSelection(others[i]),
+                            onTap: () => _selectionMode
+                                ? _toggleSelection(others[i])
+                                : _openDetail(others[i].id),
+                            onTogglePinned: () => _togglePinned(others[i]),
+                            heroTitles: heroTitles,
+                          ),
                         ),
                     ],
                   ],
@@ -921,7 +937,8 @@ class _CollectionRow extends StatelessWidget {
   );
 }
 
-/// 全局倾倒口（DESIGN.md）：置顶输入框，粘贴任意凭据文本即解析入库。
+/// 全局倾倒口（DESIGN.md）：首页主角。虚线封缄框 + 无边框输入，
+/// 与 AppBar 里的检索入口在视觉上彻底分离：倾倒是"倒进来"，检索是"找出去"。
 class _Dropzone extends StatefulWidget {
   const _Dropzone({required this.onDump});
 
@@ -954,28 +971,80 @@ class _DropzoneState extends State<_Dropzone> {
     final skin = context.skin;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: TextField(
-        controller: _controller,
-        minLines: 1,
-        maxLines: 3,
-        textInputAction: TextInputAction.done,
-        onSubmitted: (_) => _submit(),
-        style: TextStyle(color: skin.textPrimary),
-        decoration: InputDecoration(
-          hintText: '粘贴倾倒：SSH 指令 / .env / JSON 凭证',
-          prefixIcon: const Icon(Icons.bolt_outlined),
-          suffixIcon: ListenableBuilder(
-            listenable: _controller,
-            builder: (context, _) => IconButton(
-              tooltip: '封缄入库',
-              icon: Icon(
-                Icons.archive_outlined,
-                color: _controller.text.isEmpty ? skin.disabled : skin.primary,
-              ),
-              onPressed: _controller.text.isEmpty ? null : _submit,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.bolt_outlined, size: 14, color: skin.textSecondary),
+                const SizedBox(width: 4),
+                Text(
+                  '倾倒口',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: skin.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
+          CustomPaint(
+            foregroundPainter: DashedBorder(
+              color: skin.textTertiary,
+              radius: 12,
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: skin.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: 3,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                      style: TextStyle(color: skin.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: '粘贴 SSH 指令 / .env / JSON，解析后封缄入库',
+                        hintStyle: TextStyle(color: skin.textTertiary),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                  ListenableBuilder(
+                    listenable: _controller,
+                    builder: (context, _) => IconButton(
+                      tooltip: '封缄入库',
+                      icon: Icon(
+                        Icons.archive_outlined,
+                        color: _controller.text.isEmpty
+                            ? skin.disabled
+                            : skin.primary,
+                      ),
+                      onPressed: _controller.text.isEmpty ? null : _submit,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1115,76 +1184,96 @@ class _DumpDraftSheetState extends State<_DumpDraftSheet> {
   }
 }
 
-/// 面板入口（DESIGN.md）：常驻搜索 pill，点击唤醒命令控制台。
-class _PaletteHeader extends StatelessWidget {
-  const _PaletteHeader({
-    required this.assetCount,
-    required this.dueSoonCount,
-    required this.onOpenPalette,
-  });
+/// 临期状态细行：检索入口已收进 AppBar，这里只保留一句临期统计。
+class _StatsLine extends StatelessWidget {
+  const _StatsLine({required this.dueSoonCount});
 
-  final int assetCount;
   final int dueSoonCount;
-  final VoidCallback onOpenPalette;
 
   @override
   Widget build(BuildContext context) {
     final skin = context.skin;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Material(
-            color: skin.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-              side: BorderSide(color: skin.outline),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: onOpenPalette,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.search, size: 18, color: skin.textTertiary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '检索资产、字段、标签…',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: skin.textTertiary),
-                      ),
-                    ),
-                    Icon(
-                      Icons.keyboard_command_key,
-                      size: 16,
-                      color: skin.textTertiary,
-                    ),
-                  ],
-                ),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // warning 琥珀在浅底对比度不足 3:1，只做冗余装饰图标，
+            // 信息本身由次级色文字承载（设计文档对比度契约）。
+            if (dueSoonCount > 0) ...[
+              Icon(Icons.schedule, size: 14, color: skin.warning),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              '30 天内临期 $dueSoonCount 项',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: skin.textSecondary,
+                fontWeight: dueSoonCount > 0 ? FontWeight.w600 : null,
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              '当前 $assetCount 项 · 30 天临期 $dueSoonCount 项',
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: skin.textSecondary),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+}
+
+/// 列表行入场：淡入 + 8px 上浮（motion/medium 220ms），按序号错峰 35ms。
+/// 只在 widget 实例首次创建时播放，重建复用时不重播。
+class _Entrance extends StatefulWidget {
+  const _Entrance({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_Entrance> createState() => _EntranceState();
+}
+
+class _EntranceState extends State<_Entrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    final delay = Duration(milliseconds: widget.index.clamp(0, 12) * 35);
+    Future.delayed(delay, () {
+      if (mounted) {
+        _controller.forward();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, child) {
+      final curved = CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
+      );
+      return Opacity(
+        opacity: curved.value,
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - curved.value)),
+          child: child,
+        ),
+      );
+    },
+    child: widget.child,
+  );
 }
 
 class _AssetRow extends StatelessWidget {
@@ -1196,6 +1285,7 @@ class _AssetRow extends StatelessWidget {
     required this.onToggleSelected,
     required this.onTap,
     required this.onTogglePinned,
+    required this.heroTitles,
   });
 
   final Asset asset;
@@ -1206,94 +1296,129 @@ class _AssetRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onTogglePinned;
 
+  /// 移动端列表→详情启用标题 hero 转场；桌面端三栏同屏不启用（避免同路由重复 tag）。
+  final bool heroTitles;
+
   @override
   Widget build(BuildContext context) {
     final skin = context.skin;
     final dueDate = AssetFilter.dueDateOf(asset);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final overdue = dueDate != null && dueDate.isBefore(today);
+    final dueSoon =
+        dueDate != null &&
+        !overdue &&
+        dueDate.isBefore(now.add(const Duration(days: 30)));
     final amount =
         (asset.type == AssetType.bill || asset.type == AssetType.subscription)
         ? asset.fields['amount']?.toString()
         : null;
-    final meta = [
+    final metaBase = [
       asset.type.label,
       if (asset.tags.isNotEmpty) asset.tags.take(2).join(' / '),
-      if (dueDate != null) DateFormat('M月d日').format(dueDate),
       '更新 ${DateFormat('M月d日').format(asset.updatedAt)}',
     ].where((item) => item.trim().isNotEmpty).join(' · ');
+    final titleText = Text(
+      asset.title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.titleSmall,
+    );
 
     return Material(
       color: selected ? skin.surfaceAlt : Colors.transparent,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          overlayColor: WidgetStatePropertyAll(
-            skin.surfaceAlt.withValues(alpha: 1),
-          ),
-          onTap: onTap,
-          onLongPress: onToggleSelected,
-          child: Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              border: Border(
-                left: BorderSide(
-                  color: asset.isPinned ? skin.textPrimary : Colors.transparent,
-                  width: 2,
-                ),
-                bottom: BorderSide(color: skin.outline),
+      child: InkWell(
+        overlayColor: WidgetStatePropertyAll(
+          skin.surfaceAlt.withValues(alpha: 1),
+        ),
+        onTap: onTap,
+        onLongPress: onToggleSelected,
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: asset.isPinned ? skin.textPrimary : Colors.transparent,
+                width: 2,
               ),
+              bottom: BorderSide(color: skin.outline),
             ),
-            child: Row(
-              children: [
-                if (selectionMode) ...[
-                  GFCheckbox(
-                    value: selected,
-                    onChanged: (_) => onToggleSelected(),
-                    size: 20,
-                    activeBgColor: skin.primary,
-                    activeBorderColor: skin.primary,
-                    inactiveBgColor: skin.surface,
-                    inactiveBorderColor: skin.outline,
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                AssetTypeBadge(type: asset.type, size: 28),
+          ),
+          child: Row(
+            children: [
+              if (selectionMode) ...[
+                GFCheckbox(
+                  value: selected,
+                  onChanged: (_) => onToggleSelected(),
+                  size: 20,
+                  activeBgColor: skin.primary,
+                  activeBorderColor: skin.primary,
+                  inactiveBgColor: skin.surface,
+                  inactiveBorderColor: skin.outline,
+                ),
+                const SizedBox(width: 10),
+              ],
+              AssetTypeBadge(type: asset.type, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    heroTitles
+                        ? Hero(
+                            tag: 'asset-title-${asset.id}',
+                            child: titleText,
+                          )
+                        : titleText,
+                    const SizedBox(height: 2),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: smartTruncate(metaBase, max: 42)),
+                          if (dueDate != null)
+                            TextSpan(
+                              // 逾期用 danger（测试锁定浅底 ≥3:1）；
+                              // 临期用正文色加粗：warning 琥珀在浅底不足 3:1，不做文字色。
+                              text:
+                                  ' · ${DateFormat('M月d日').format(dueDate)}'
+                                  '${overdue ? '已逾期' : dueSoon ? '临期' : ''}',
+                              style: TextStyle(
+                                color: overdue
+                                    ? skin.danger
+                                    : dueSoon
+                                    ? skin.textPrimary
+                                    : null,
+                                fontWeight: overdue || dueSoon
+                                    ? FontWeight.w600
+                                    : null,
+                              ),
+                            ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: skin.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (amount != null) ...[
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        asset.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        smartTruncate(meta, max: 42),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: skin.textSecondary),
-                      ),
-                    ],
+                Text(
+                  amount,
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
-                if (amount != null) ...[
-                  const SizedBox(width: 12),
-                  Text(
-                    amount,
-                    textAlign: TextAlign.right,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ] else if (!selectionMode)
-                  Icon(Icons.chevron_right, size: 18, color: skin.textTertiary),
-              ],
-            ),
+              ] else if (!selectionMode)
+                Icon(Icons.chevron_right, size: 18, color: skin.textTertiary),
+            ],
           ),
         ),
       ),

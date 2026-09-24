@@ -487,7 +487,13 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
       child: Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: !widget.embedded,
-          title: Text(asset.title),
+          // 移动端与列表行标题 hero 联动；桌面端三栏同屏不启用。
+          title: widget.embedded
+              ? Text(asset.title)
+              : Hero(
+                  tag: 'asset-title-${asset.id}',
+                  child: Text(asset.title),
+                ),
           actions: [
             IconButton(
               icon: const Icon(Icons.edit_outlined),
@@ -536,13 +542,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
                           Text(
                             asset.type.label,
                             style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color:
-                                      Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? skin.textSecondary
-                                      : skin.textSecondary,
-                                ),
+                                ?.copyWith(color: skin.textSecondary),
                           ),
                           if (asset.tags.isNotEmpty) ...[
                             const SizedBox(height: 8),
@@ -602,9 +602,8 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
               ),
             ],
             if (asset.fields.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              Text('字段', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
+              const SizedBox(height: 24),
+              const _SectionHeader(title: '字段'),
               _DetailCard(
                 child: Column(
                   children: [
@@ -613,13 +612,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
                         title: Text(
                           AssetFieldFormat.label(entry.key),
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color:
-                                    Theme.of(context).brightness ==
-                                        Brightness.dark
-                                    ? skin.textSecondary
-                                    : skin.textSecondary,
-                              ),
+                              ?.copyWith(color: skin.textSecondary),
                         ),
                         subtitle: Text(
                           AssetFieldFormat.value(entry.key, entry.value),
@@ -634,7 +627,8 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
               ),
             ],
             if (asset.encryptedSecret != null) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
+              const _SectionHeader(title: '封缄密文'),
               _SealedSecretCard(
                 revealed: _revealedSecret,
                 error: _secretError,
@@ -644,36 +638,28 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
                 onCopy: _copySecret,
               ),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             _NotesCard(
               notes: _notes,
               onAddNote: _addNote,
               onDeleteNote: _deleteNote,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             _AttachmentsCard(
               attachments: _attachments,
               repository: widget.repository,
               onAdd: _pickImage,
               onDelete: _deleteAttachment,
             ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '上下游依赖',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: _addRelation,
-                  icon: const Icon(Icons.add_link),
-                  label: const Text('添加关联'),
-                ),
-              ],
+            const SizedBox(height: 24),
+            _SectionHeader(
+              title: '上下游依赖',
+              action: TextButton.icon(
+                onPressed: _addRelation,
+                icon: const Icon(Icons.add_link),
+                label: const Text('添加关联'),
+              ),
             ),
-            const SizedBox(height: 8),
             if (_relations.isEmpty)
               _DetailCard(
                 child: Padding(
@@ -726,8 +712,8 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
   }
 }
 
-/// 封缄敏感卡：frosted + blur 开合（motion/medium 240ms），
-/// 显示 8 秒无操作自动隐藏（设计文档 §4.4）。
+/// 封缄敏感卡：虚线封缄边框 + 火漆印式徽标 + surfaceAlt 底，
+/// 全 App 唯一的"皇冠"视觉；显示 8 秒无操作自动隐藏（设计文档 §4.4）。
 class _SealedSecretCard extends StatelessWidget {
   const _SealedSecretCard({
     required this.revealed,
@@ -756,7 +742,7 @@ class _SealedSecretCard extends StatelessWidget {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: skin.surface,
+          color: skin.surfaceAlt,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -764,9 +750,42 @@ class _SealedSecretCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.lock_outline, size: 18),
-                const SizedBox(width: 8),
-                const Expanded(child: Text('已加密')),
+                // 火漆印：虚线圆徽 + 锁芯，随开合切换。
+                CustomPaint(
+                  foregroundPainter: DashedBorder(
+                    color: skin.textSecondary,
+                    radius: 20,
+                  ),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Icon(
+                      isOpen
+                          ? Icons.lock_open_outlined
+                          : Icons.lock_outline,
+                      size: 18,
+                      color: skin.textPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '封缄密文',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isOpen ? '已解密 · 8 秒无操作自动隐藏' : '本地解密后显示，不落明文',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: skin.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
                 TextButton(
                   onPressed: busy
                       ? null
@@ -811,11 +830,6 @@ class _SealedSecretCard extends StatelessWidget {
                     height: 1.45,
                   ),
                 ),
-              )
-            else
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
-                child: Text('显示后本地解密，8 秒自动隐藏。'),
               ),
           ],
         ),
@@ -874,21 +888,16 @@ class _NotesCardState extends State<_NotesCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text('备注', style: Theme.of(context).textTheme.titleLarge),
-            ),
-            TextButton.icon(
-              onPressed: _composing
-                  ? null
-                  : () => setState(() => _composing = true),
-              icon: const Icon(Icons.edit_note),
-              label: const Text('添加备注'),
-            ),
-          ],
+        _SectionHeader(
+          title: '备注',
+          action: TextButton.icon(
+            onPressed: _composing
+                ? null
+                : () => setState(() => _composing = true),
+            icon: const Icon(Icons.edit_note),
+            label: const Text('添加备注'),
+          ),
         ),
-        const SizedBox(height: 8),
         if (_composing)
           _DetailCard(
             child: Padding(
@@ -1001,19 +1010,14 @@ class _AttachmentsCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text('图片', style: Theme.of(context).textTheme.titleLarge),
-            ),
-            TextButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add_a_photo_outlined),
-              label: const Text('添加图片'),
-            ),
-          ],
+        _SectionHeader(
+          title: '图片',
+          action: TextButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add_a_photo_outlined),
+            label: const Text('添加图片'),
+          ),
         ),
-        const SizedBox(height: 8),
         if (attachments.isEmpty)
           _DetailCard(
             child: Padding(
@@ -1304,6 +1308,33 @@ class _AddRelationSheetState extends State<_AddRelationSheet> {
       ),
     );
   }
+}
+
+/// 分组眉题：小字号 + 次级色 + 右侧可选动作，统一详情页各区块的节奏。
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, this.action});
+
+  final String title;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: context.skin.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        if (action != null) action!,
+      ],
+    ),
+  );
 }
 
 /// GFCard 皮肤适配：GF 不读 ThemeData，显式传 surface/outline/零边距。

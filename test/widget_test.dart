@@ -69,7 +69,7 @@ void main() {
 
   testWidgets('命令面板按类型检索并直达详情', (tester) async {
     await unlockApp(tester);
-    await tester.tap(find.text('检索资产、字段、标签…'));
+    await tester.tap(find.byTooltip('检索'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, '检索资产、字段、标签…'), '邮箱');
     await tester.pump();
@@ -91,7 +91,7 @@ void main() {
 
   testWidgets('命令面板支持字段检索、清空恢复与空态', (tester) async {
     await unlockApp(tester);
-    await tester.tap(find.text('检索资产、字段、标签…'));
+    await tester.tap(find.byTooltip('检索'));
     await tester.pumpAndSettle();
     final palette = find.byType(CommandPalette);
     final paletteInput = find.descendant(
@@ -374,7 +374,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('已选 1 项'), findsNothing);
     // 打上标签后，命令面板可按新标签检索到该资产
-    await tester.tap(find.text('检索资产、字段、标签…'));
+    await tester.tap(find.byTooltip('检索'));
     await tester.pumpAndSettle();
     final palette = find.byType(CommandPalette);
     await tester.enterText(
