@@ -188,6 +188,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
+          fontFamily: 'NotoSansSC',
           color: skin.textPrimary,
           fontSize: 22,
           height: 28 / 22,
@@ -227,7 +228,7 @@ class AppTheme {
         style: FilledButton.styleFrom(
           minimumSize: const Size(64, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          textStyle: const TextStyle(fontFamily: 'NotoSansSC', fontSize: 14, fontWeight: FontWeight.w500),
         ).copyWith(
           backgroundColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.disabled)
@@ -245,7 +246,7 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(64, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          textStyle: const TextStyle(fontFamily: 'NotoSansSC', fontSize: 14, fontWeight: FontWeight.w500),
         ).copyWith(
           foregroundColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.disabled)
@@ -256,7 +257,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          textStyle: const TextStyle(fontFamily: 'NotoSansSC', fontSize: 14, fontWeight: FontWeight.w500),
         ).copyWith(
           foregroundColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.disabled)
@@ -319,8 +320,10 @@ class AppTheme {
         borderSide: BorderSide(color: color, width: width),
       );
 
+  // 注意:先 copyWith 再 apply,确保 fontFamily 落到每一个覆盖后的样式上。
+  // 若先 apply 再用不带 family 的 const TextStyle 覆盖,会把 family 丢掉,
+  // Web 预览无系统 CJK 回退时中文会变 tofu。
   static TextTheme _textTheme(TextTheme base, Color color) => base
-      .apply(bodyColor: color, displayColor: color, fontFamily: 'NotoSansSC')
       .copyWith(
         displaySmall: const TextStyle(
           fontSize: 28,
@@ -354,5 +357,6 @@ class AppTheme {
           height: 16 / 12,
           fontWeight: FontWeight.w500,
         ),
-      );
+      )
+      .apply(bodyColor: color, displayColor: color, fontFamily: 'NotoSansSC');
 }

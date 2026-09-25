@@ -364,6 +364,8 @@ class _SubmitButton extends StatelessWidget {
             color: context.skin.primary,
             textColor: context.skin.onPrimary,
             text: label,
+            // GFButton 内部 textStyle 不带 family,Web 预览中文会 tofu,显式补上。
+            textStyle: const TextStyle(fontFamily: 'NotoSansSC'),
           ),
   );
 }
